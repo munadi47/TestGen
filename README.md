@@ -1,4 +1,4 @@
-# Project Title
+# Test Case Generation
 
 This project is an ongoing application with three main features designed to assist with Software Quality Assurance (SQA) tasks and for fullfiling my bachelor degree Thesis.
 ## How to Run
