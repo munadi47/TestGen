@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}KB Bank - Test Case Refinement{% endblock %}
+
+{% block content %}
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Test Case Refinement</h1>
+            <p class="text-gray-600">Upload your test cases to automatically enhance and optimize them</p>
+        </div>
+        <div class="flex items-center">
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center">
+                <i class="fas fa-question-circle mr-2"></i> Help
+            </button>
+        </div>
+    </div>
+    
+    <div class="card p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Upload Test Cases</h2>
+        <p class="text-gray-600 mb-6">Upload your existing test cases in Excel (XLSX) or CSV format to automatically refine them.</p>
+        
+        <div class="file-upload-container">
+            <div id="drop-area" class="mb-4">
+                <div class="flex flex-col items-center justify-center">
+                    <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
+                    <p class="text-lg font-medium mb-2">Drag & drop your file here</p>
+                    <p class="text-gray-500 mb-4">or</p>
+                    <label for="file-input" class="file-upload-btn">
+                        <i class="fas fa-upload"></i> Select File
+                    </label>
+                    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden">
+                </div>
+            </div>
+            
+            <div id="file-info" class="file-info">
+                <div class="flex items-center">
+                    <i class="fas fa-file-excel text-green-600 text-xl mr-3"></i>
+                    <div>
+                        <p class="font-medium" id="file-name">test_cases.xlsx</p>
+                        <p class="text-sm text-gray-500" id="file-size">2.4 MB</p>
+                    </div>
+                    <button id="remove-file" class="ml-auto text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Refinement</h2>
+        <p class="text-gray-600 mb-6">Achieve comprehensive refinement for your test cases with our all-encompassing
+            solutions:</p>
+    
+        <div class="refinement">
+            <div class="option-card">
+                <h3><i class="fas fa-bolt"></i> Optimization</h3>
+                <p class="text-gray-600">We remove redundancies, combine similar cases, and enhance overall efficiency.</p>
+            </div>
+    
+            <div class="option-card">
+                <h3><i class="fas fa-star"></i> Coverage Enhancement</h3>
+                <p class="text-gray-600">We add edge cases and negative scenarios, ensuring thorough test coverage.</p>
+            </div>
+    
+            <div class="option-card">
+                <h3><i class="fas fa-copy"></i> Format Standardization</h3>
+                <p class="text-gray-600">We apply KB Bank's standard test case templates and formatting guidelines.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="results-container" class="results-container">
+        <div class="card p-6">
+            <h2 class="text-xl font-semibold mb-4">Refined Test Cases</h2>
+            <p class="text-gray-600 mb-6">Your test cases have been automatically refined with the following improvements:</p>
+            
+            <div class="refinement-stats">
+                <div class="stat-card">
+                    <h3>Original Test Cases</h3>
+                    <div class="value" id="original-count">12</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Refined Test Cases</h3>
+                    <div class="value" id="refined-count">18</div>
+                    <div class="improvement">
+                        <i class="fas fa-arrow-up mr-1"></i> 50% increase
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Coverage Increase</h3>
+                    <div class="value" id="coverage-increase">35%</div>
+                    <div class="improvement">
+                        <i class="fas fa-arrow-up mr-1"></i> More scenarios
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Execution Time</h3>
+                    <div class="value" id="execution-time">42 min</div>
+                    <div class="improvement">
+                        <i class="fas fa-arrow-down mr-1"></i> 15% faster
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="test-case-table">
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Description</th>
+                            <th>Steps</th>
+                            <th>Expected Result</th>
+                            <th>Improvement</th>
+                        </tr>
+                    </thead>
+                    <tbody id="test-case-results">
+                        </tbody>
+                </table>
+            </div>
+            
+            <div class="flex justify-end mt-6">
+                <button id="download-btn" class="download-btn">
+                    <i class="fas fa-download"></i> Download Refined Test Cases
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const removeFileBtn = document.getElementById('remove-file');
+    const resultsContainer = document.getElementById('results-container');
+    const testCaseResults = document.getElementById('test-case-results');
+    const originalCount = document.getElementById('original-count');
+    const refinedCount = document.getElementById('refined-count');
+    const coverageIncrease = document.getElementById('coverage-increase');
+    const executionTime = document.getElementById('execution-time');
+    const downloadBtn = document.getElementById('download-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const progressBar = document.getElementById('progress-bar');
+    
+    let selectedFile = null;
+    
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+    });
+    
+    // Handle dropped files
+    dropArea.addEventListener('drop', handleDrop, false);
+    
+    // Handle file selection via button
+    fileInput.addEventListener('change', function(e) {
+        if (this.files.length) {
+            handleFiles(this.files);
+        }
+    });
+    
+    // Remove file
+    removeFileBtn.addEventListener('click', function() {
+        selectedFile = null;
+        fileInfo.classList.remove('show');
+        fileInput.value = '';
+        resultsContainer.classList.remove('show');
+    });
+    
+    // Download button click
+    downloadBtn.addEventListener('click', function() {
+        // In a real app, this would download the actual refined file
+        // Using a custom modal/message box instead of alert()
+        showCustomMessage('Download Initiated', 'Downloading refined test cases...');
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    function highlight() {
+        dropArea.classList.add('highlight');
+    }
+    
+    function unhighlight() {
+        dropArea.classList.remove('highlight');
+    }
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+    
+    function handleFiles(files) {
+        const file = files[0];
+        
+        // Check if file is Excel or CSV
+        const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                           'application/vnd.ms-excel', 
+                           'text/csv'];
+        
+        if (!validTypes.includes(file.type) && 
+            !file.name.endsWith('.xlsx') && 
+            !file.name.endsWith('.xls') && 
+            !file.name.endsWith('.csv')) {
+            // Using a custom modal/message box instead of alert()
+            showCustomMessage('Unsupported File Type', 'Please upload an Excel (XLSX/XLS) or CSV file.');
+            return;
+        }
+        
+        selectedFile = file;
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+        fileInfo.classList.add('show');
+        
+        // Start refinement process immediately
+        showLoading();
+        setTimeout(showResults, 2000); // Simulate processing delay
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function showLoading() {
+        loadingOverlay.style.display = 'flex';
+        
+        // Simulate progress
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 10;
+            if (progress > 100) progress = 100;
+            progressBar.style.width = progress + '%';
+            
+            if (progress === 100) {
+                clearInterval(interval);
+                setTimeout(hideLoading, 500);
+            }
+        }, 300);
+    }
+    
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
+    }
+    
+    function showResults() {
+        // Generate sample refined test cases
+        const sampleTestCases = [
+            {
+                id: "TC_LOGIN_001",
+                description: "Verify successful login with valid credentials",
+                steps: "1. Navigate to login page\n2. Enter valid username\n3. Enter valid password\n4. Click login button",
+                expected: "User is redirected to dashboard page",
+                improvement: "Optimized steps"
+            },
+            {
+                id: "TC_LOGIN_002",
+                description: "Verify login fails with invalid password",
+                steps: "1. Navigate to login page\n2. Enter valid username\n3. Enter invalid password\n4. Click login button",
+                expected: "Error message displayed: 'Invalid credentials'",
+                improvement: "Added validation"
+            },
+            {
+                id: "TC_LOGIN_003",
+                description: "Verify login fails with empty username",
+                steps: "1. Navigate to login page\n2. Leave username field empty\n3. Enter valid password\n4. Click login button",
+                expected: "Error message displayed: 'Username is required'",
+                improvement: "New test case"
+            },
+            {
+                id: "TC_LOGIN_004",
+                description: "Verify password field masks input",
+                steps: "1. Navigate to login page\n2. Enter text in password field",
+                expected: "Password characters are masked (displayed as •)",
+                improvement: "Standardized format"
+            },
+            {
+                id: "TC_LOGIN_005",
+                description: "Verify 'Remember Me' functionality",
+                steps: "1. Navigate to login page\n2. Enter valid credentials\n3. Check 'Remember Me' box\n4. Click login button\n5. Log out\n6. Navigate back to login page",
+                expected: "Username is pre-filled, password field is empty",
+                improvement: "Automation-ready"
+            },
+            {
+                id: "TC_TRANSFER_001",
+                description: "Verify successful funds transfer",
+                steps: "1. Navigate to transfer page\n2. Select source account\n3. Enter recipient details\n4. Enter amount\n5. Click transfer button",
+                expected: "Transfer confirmation displayed\nAccount balances updated",
+                improvement: "Optimized flow"
+            },
+            {
+                id: "TC_TRANSFER_002",
+                description: "Verify transfer fails with insufficient funds",
+                steps: "1. Navigate to transfer page\n2. Select source account\n3. Enter recipient details\n4. Enter amount exceeding balance\n5. Click transfer button",
+                expected: "Error message displayed: 'Insufficient funds'",
+                improvement: "Added negative case"
+            }
+        ];
+        
+        // Clear previous results
+        testCaseResults.innerHTML = '';
+        
+        // Add sample test cases to table
+        sampleTestCases.forEach(testCase => {
+            const row = document.createElement('tr');
+            
+            const idCell = document.createElement('td');
+            idCell.textContent = testCase.id;
+            
+            const descCell = document.createElement('td');
+            descCell.textContent = testCase.description;
+            
+            const stepsCell = document.createElement('td');
+            stepsCell.innerHTML = testCase.steps.replace(/\n/g, '<br>');
+            
+            const expectedCell = document.createElement('td');
+            expectedCell.innerHTML = testCase.expected.replace(/\n/g, '<br>');
+            
+            const improvementCell = document.createElement('td');
+            improvementCell.innerHTML = `<span class="px-2 py-1 rounded-full text-xs font-medium ${
+                testCase.improvement === 'Optimized steps' ? 'bg-green-100 text-green-800' :
+                testCase.improvement === 'Added validation' ? 'bg-blue-100 text-blue-800' :
+                testCase.improvement === 'New test case' ? 'bg-purple-100 text-purple-800' :
+                testCase.improvement === 'Standardized format' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-indigo-100 text-indigo-800'
+            }">${testCase.improvement}</span>`;
+            
+            row.appendChild(idCell);
+            row.appendChild(descCell);
+            row.appendChild(stepsCell);
+            row.appendChild(expectedCell);
+            row.appendChild(improvementCell);
+            
+            testCaseResults.appendChild(row);
+        });
+        
+        // Show results
+        resultsContainer.classList.add('show');
+        
+        // Scroll to results
+        resultsContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Custom alert/confirm functions (replace native alert/confirm)
+    function showCustomMessage(title, message) {
+        const modalHtml = `
+            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <button id="modal-ok-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('modal-ok-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+        });
+    }
+
+    function showCustomConfirm(title, message, onConfirm) {
+        const modalHtml = `
+            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <div class="flex justify-center space-x-4">
+                        <button id="modal-cancel-btn" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button id="modal-confirm-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('modal-confirm-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        });
+        document.getElementById('modal-cancel-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+        });
+    }
+</script>
+{% endblock %}

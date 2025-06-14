@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}KB Bank - QA Chatbot{% endblock %}
+
+{% block content %}
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">KB QA Assistant</h1>
+            <p class="text-gray-600">AI-powered chatbot for your quality assurance needs</p>
+        </div>
+        <div class="flex items-center">
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center">
+                <i class="fas fa-question-circle mr-2"></i> Help
+            </button>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-yellow-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-lightbulb text-yellow-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Test Guidance</h3>
+            </div>
+            <p class="text-gray-600">Get expert advice on test strategies, methodologies, and best practices for your specific needs.</p>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-green-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-code text-green-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Code Examples</h3>
+            </div>
+            <p class="text-gray-600">Request ready-to-use code snippets for automation frameworks and test scripts.</p>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-purple-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-book text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Documentation</h3>
+            </div>
+            <p class="text-gray-600">Access KB Bank's testing standards, policies, and documentation instantly.</p>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="chat-header">
+            <div class="chat-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div>
+                <div class="chat-title">KB QA Assistant</div>
+                <div class="chat-status">Online</div>
+            </div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message message-bot">
+                    <!-- <div class="message-content bot-message">
+                        Hello! I'm your KB QA Assistant. How can I help you with your quality assurance tasks today?
+                    </div>
+                    <div class="message-time">Today, 10:00 AM</div> -->
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <label for="image-input" class="cursor-pointer text-gray-500 hover:text-gray-700 p-2 rounded-full">
+                    <i class="fas fa-image text-xl"></i>
+                </label>
+                <input type="file" id="image-input" accept="image/*" class="hidden">
+                <textarea id="message-input" placeholder="Type your message here..." rows="1"></textarea>
+                <button class="send-button" id="send-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div id="image-preview-container" class="hidden flex items-center justify-between p-2 bg-gray-100 border-t border-gray-200 rounded-b-lg">
+                <div class="flex items-center">
+                    <img id="image-preview" src="" alt="Image Preview" class="w-16 h-16 object-cover rounded-md mr-3">
+                    <span id="image-filename" class="text-sm text-gray-700"></span>
+                </div>
+                <button id="remove-image-btn" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+    const chatMessages = document.getElementById('chat-messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const loadingOverlay = document.getElementById('loading-overlay'); // From base.html
+    const loadingTitle = document.getElementById('loading-title'); // From base.html
+    const loadingMessage = document.getElementById('loading-message'); // From base.html
+    const imageInput = document.getElementById('image-input');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const imageFilename = document.getElementById('image-filename');
+    const removeImageBtn = document.getElementById('remove-image-btn');
+
+    let selectedImageFile = null;
+
+    // Auto-resize textarea as user types
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+    
+    // Handle image input change
+    imageInput.addEventListener('change', function(event) {
+        if (event.target.files.length > 0) {
+            selectedImageFile = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                imageFilename.textContent = selectedImageFile.name;
+                imagePreviewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(selectedImageFile);
+        }
+    });
+
+    // Handle remove image button click
+    removeImageBtn.addEventListener('click', function() {
+        selectedImageFile = null;
+        imageInput.value = ''; // Clear the file input
+        imagePreviewContainer.classList.add('hidden');
+        imagePreview.src = '';
+        imageFilename.textContent = '';
+    });
+
+    // Send message on Enter key (but allow Shift+Enter for new lines)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Send message on button click
+    sendButton.addEventListener('click', sendMessage);
+    
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        
+        if (message === '' && !selectedImageFile) {
+            showCustomMessage('Empty Message', 'Please enter a message or upload an image.');
+            return;
+        }
+        
+        // Add user message to chat display immediately
+        addUserMessageToChat(message, selectedImageFile);
+        
+
+
+        // Show loading indicator
+        showLoading('Thinking...', 'The QA Assistant is processing your request.');
+        
+        const formData = new FormData();
+        formData.append('user_input', message);
+        if (selectedImageFile) {
+            formData.append('image', selectedImageFile);
+        }
+
+        try {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.response || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            addBotMessageToChat(data.response);
+
+            // Clear input and image preview
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            selectedImageFile = null;
+            imageInput.value = '';
+            imagePreviewContainer.classList.add('hidden');
+            imagePreview.src = '';
+            imageFilename.textContent = '';
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addBotMessageToChat(`Error: ${error.message}`);
+        } finally {
+            hideLoading();
+            // Scroll to bottom of chat after response
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }
+    
+    function addUserMessageToChat(content, imageFile) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-user`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content user-message';
+        
+        if (content) {
+            contentDiv.textContent = content;
+        }
+
+        if (imageFile) {
+            const imgElement = document.createElement('img');
+            imgElement.src = URL.createObjectURL(imageFile);
+            imgElement.alt = "User uploaded image";
+            imgElement.className = "max-w-full h-auto rounded-lg mb-2";
+            contentDiv.prepend(imgElement); // Add image before text
+        }
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = `Today, ${timeString}`;
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timeDiv);
+        chatMessages.appendChild(messageDiv);
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addBotMessageToChat(content) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-bot`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content bot-message';
+        // Use innerHTML to allow for <br> tags from bot's response
+        contentDiv.innerHTML = content.replace(/\n/g, '<br>'); 
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = `Today, ${timeString}`;
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timeDiv);
+        chatMessages.appendChild(messageDiv);
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    // Run on page load
+    document.addEventListener("DOMContentLoaded", () => {
+        addBotMessageToChat("Hello! I'm your KB QA Assistant. How can I help you with your quality assurance tasks today?");
+    });
+            
+    function showLoading(title, message) {
+        loadingTitle.textContent = title;
+        loadingMessage.textContent = message;
+        loadingOverlay.style.display = 'flex';
+    }
+    
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
+    }
+
+    // Custom alert/confirm functions (replace native alert/confirm)
+    function showCustomMessage(title, message) {
+        const modalHtml = `
+            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <button id="modal-ok-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('modal-ok-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+        });
+    }
+
+    function showCustomConfirm(title, message, onConfirm) {
+        const modalHtml = `
+            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <div class="flex justify-center space-x-4">
+                        <button id="modal-cancel-btn" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button id="modal-confirm-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('modal-confirm-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        });
+        document.getElementById('modal-cancel-btn').addEventListener('click', function() {
+            document.getElementById('custom-modal').remove();
+        });
+    }
+</script>
+{% endblock %}

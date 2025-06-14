@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}KB Bank - SQA Automation{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar hidden md:block p-4 lg:p-6 text-white">
+            <div class="flex items-center mb-10">
+                <img class="h-12 w-auto" src="{{ url_for('static', filename='Logo/logofix.png') }}" alt="KB Bank">
+                <span class="ml-3 text-xl font-bold">SQA <br>Automation</span>
+            </div>
+            
+            <div class="mb-8">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-blue-200 mb-4">MAIN MENU</h3>
+                <ul>
+                    <li class="nav-item mb-1">
+                        <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-3 rounded-lg font-medium text-white">
+                            <i class="fas fa-tachometer-alt mr-3"></i>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="{{ url_for('chatbot') }}" class="flex items-center px-4 py-3 rounded-lg font-medium text-white">
+                            <i class="fas fa-robot mr-3"></i>
+                            QA Chatbot
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="{{ url_for('flowchart') }}" class="flex items-center px-4 py-3 rounded-lg font-medium text-white">
+                            <i class="fas fa-project-diagram mr-3"></i>
+                            Test Case Generation
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="{{ url_for('refinement') }}" class="flex items-center px-4 py-3 rounded-lg font-medium text-white">
+                            <i class="fas fa-cogs mr-3"></i>
+                            Test Refinement
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="mt-auto pt-6 border-t border-yellow-800">
+                <div class="flex items-center">
+                    <div class="h-10 w-10 rounded-full bg-yellow-600 flex items-center justify-center">
+                        <i class="fas fa-user text-white"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium">SQA Team Member</p>
+                        <p class="text-xs text-yellow-200">Core System Department <br>KB Bank</p>
+                    </div>
+                    <!-- <i class="fas fa-building mr-1"></i>Core System Department - KB Bank -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content p-8">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3 class="text-xl font-bold mb-2" id="loading-title">Processing Request</h3>
+            <p class="text-gray-600 mb-4" id="loading-message">Please wait...</p>
+            <!-- <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div class="bg-blue-600 h-2.5 rounded-full" id="progress-bar" style="width: 0%"></div>
+            </div> -->
+            <!-- <p class="text-sm text-gray-500 mt-2" id="progress-text">0% complete</p> -->
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='styles/script.js') }}"></script>
+    {% block page_scripts %}{% endblock %}
+</body>
+</html>
