@@ -4,6 +4,7 @@ import uuid
 import io
 import base64 # Added for image encoding
 import requests # Added for direct API calls
+import csv # **FIX**: Ditambahkan untuk parsing CSV yang lebih andal
 
 from flask import Flask, render_template, request, jsonify, url_for, send_file
 from werkzeug.utils import secure_filename
@@ -308,8 +309,93 @@ def generate_test_cases_route():
 def chatbot():
     return render_template('chatbot.html')
 
-@app.route('/refinement.html')
+# @app.route('/refinement.html')
+# def refinement():
+#     return render_template('refinement.html')
+@app.route('/refinement.html', methods=['GET', 'POST'])
 def refinement():
+    # **FIX**: Moved the function definition inside the route to guarantee its availability.
+    def dataframe_to_markdown_table(df):
+        """
+        Converts a pandas DataFrame to a simple Markdown table string.
+        """
+        header = "| " + " | ".join(df.columns) + " |"
+        separator = "| " + " | ".join(["---"] * len(df.columns)) + " |"
+        body_rows = []
+        for row in df.itertuples(index=False):
+            # Ensure all items are converted to string to avoid errors
+            body_rows.append("| " + " | ".join(map(str, row)) + " |")
+        body = "\n".join(body_rows)
+        return "\n".join([header, separator, body])
+
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        if not (file.filename.endswith('.xlsx') or file.filename.endswith('.csv')):
+            return jsonify({'error': 'Unsupported file format. Please upload an .xlsx or .csv file.'}), 400
+
+        try:
+            if file.filename.endswith('.xlsx'):
+                df_original = pd.read_excel(file)
+            else: 
+                csv_data = io.StringIO(file.stream.read().decode("UTF-8"))
+                df_original = pd.read_csv(csv_data)
+
+            if df_original.empty:
+                return jsonify({'error': 'The uploaded file is empty or could not be read.'}), 400
+            
+            # Convert original dataframe to Markdown to be sent to the AI
+            original_test_cases_md = dataframe_to_markdown_table(df_original)
+            original_count = len(df_original)
+
+            if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY':
+                return jsonify({'error': 'Gemini API key is not configured on the server.'}), 500
+
+            model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+            
+            prompt = f"""
+            You are a Software Quality Assurance expert specializing in test case refinement.
+            Your task is to analyze the provided test cases and improve the test suite coverage.
+
+            **Instructions:**
+            1.  **Analyze Existing Cases:** Carefully review the provided test cases in the Markdown table format below.
+            2.  **Enhance Coverage:** Add new rows to the table to cover missing scenarios. This should include:
+                * **Negative Test Cases:** Scenarios with invalid inputs or actions that should result in an error.
+                * **Edge Cases:** Scenarios that test the boundaries of input values.
+            3.  **Maintain Format:** Preserve the exact same Markdown table format as the input.
+            4.  **Do Not Delete:** Return all original rows plus your new ones in a single Markdown table.
+            5.  **Output Format:** The final output MUST be only a Markdown table. Do not add any explanations, introductions, or markdown formatting like ```.
+
+            **Original Test Cases (Markdown Table):**
+            {original_test_cases_md}
+
+            **Your Refined Markdown Table Output:**
+            """
+            
+            response = model.generate_content(prompt)
+            
+            # Clean the response text from the model
+            refined_markdown_text = response.text.strip()
+            if refined_markdown_text.startswith("```markdown"):
+                refined_markdown_text = refined_markdown_text[len("```markdown"):].strip()
+            if refined_markdown_text.endswith("```"):
+                refined_markdown_text = refined_markdown_text[:-3].strip()
+
+            return jsonify({
+                "refined_markdown": refined_markdown_text,
+                "original_count": original_count
+            })
+
+        except Exception as e:
+            logging.error(f"An error occurred during test case refinement: {e}")
+            return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
     return render_template('refinement.html')
 
 # @app.route('/chat', methods=['POST'])
