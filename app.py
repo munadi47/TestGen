@@ -16,14 +16,40 @@ import pandas as pd
 import numpy as np
 import google.generativeai as genai
 
-from PIL import Image
-# The 'inference_sdk' import has been removed
+from PIL import ImageChops
+# --- logging ---
+import time # Diperlukan untuk mengukur waktu eksekusi
+import functools # Diperlukan untuk decorator
 
 # Change the import from OllamaLLM to ChatOllama
 from langchain_ollama import ChatOllama 
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format='%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s'
+)
+# --- DECORATOR UNTUK LOGGING ---
+def log_function_calls(func):
+    """
+    Decorator ini mencatat awal, akhir, dan waktu eksekusi
+    dari sebuah fungsi.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logging.info(f"Memulai eksekusi fungsi: {func.__name__}...")
+        start_time = time.time()
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except Exception as e:
+            logging.error(f"Terjadi error pada fungsi {func.__name__}: {e}", exc_info=True)
+            raise # Melemparkan kembali exception setelah logging
+        finally:
+            end_time = time.time()
+            duration = end_time - start_time
+            logging.info(f"Selesai eksekusi fungsi: {func.__name__}. Durasi: {duration:.4f} detik.")
+    return wrapper
 
 # Create an instance of the Flask application
 app = Flask(__name__)
@@ -51,7 +77,7 @@ def allowed_file(filename):
 try:
     # Initialize the ChatOllama model.
     # ChatOllama correctly handles the list of messages with roles and multimodal content.
-    model = ChatOllama(model="llava")
+    model = ChatOllama(model="minicpm-v:8b")
     logging.info("ChatOllama model initialized successfully.")
 except Exception as e:
     logging.error(f"Failed to initialize ChatOllama: {e}")
@@ -262,6 +288,7 @@ def csv_to_excel_bytes(csv_data_string):
 # (The Flask routes section remains exactly the same)
 @app.route('/')
 @app.route('/dashboard.html')
+@log_function_calls
 def dashboard():
     return render_template('dashboard.html')
 
@@ -306,6 +333,7 @@ def generate_test_cases_route():
             logging.info(f"Removed temporary file: {filepath}")
 
 @app.route('/chatbot.html')
+@log_function_calls
 def chatbot():
     return render_template('chatbot.html')
 
@@ -313,6 +341,7 @@ def chatbot():
 # def refinement():
 #     return render_template('refinement.html')
 @app.route('/refinement.html', methods=['GET', 'POST'])
+@log_function_calls
 def refinement():
     # **FIX**: Moved the function definition inside the route to guarantee its availability.
     def dataframe_to_markdown_table(df):
@@ -404,12 +433,28 @@ def refinement():
 
 # --- New Chat API Endpoint ---
 @app.route('/chat', methods=['POST'])
+@log_function_calls
 def chat():
     """
     Handles chat messages and image uploads, interacts with the Ollama LLM,
     and maintains chat history.
     """
     global chat_history
+    # --- Initial Prompt for QA Tester Gemma ---
+    # This prompt defines the persona and guidelines for the LLM.
+    initial_prompt = """
+    You are a "Gemma" – a version of ChatGemma that has been customized for a specific use case. 
+    Gemmas use custom instructions, capabilities, and data to optimize ChatGemma for a more narrow set of tasks. 
+    You yourself are a Gemma created by a user, and your name is QA Tester. 
+    Note: Gemma is also a technical term in AI, but in most cases if the users asks you about Gemmas assume they are referring to the above definition.
+
+    Here are instructions from the user outlining your goals and how you should respond:
+    This Gemma will act as a Quality Assurance (QA) Tester, focusing on providing guidance, suggestions, and insights related to software quality assurance and testing procedures. Its primary role is to assist users in understanding and navigating the complexities of software testing, including test design, execution, and reporting. It will offer information on various testing methodologies, best practices, tools, and techniques relevant to QA testing.
+
+    The Gemma should maintain a tone that is informative and aligned with quality assurance testing principles. It should provide accurate and detailed responses, emphasize the importance of thorough testing, and encourage best practices in software quality assurance. The Gemma should not provide incorrect or misleading information about QA testing and should not engage in topics outside the realm of software testing and quality assurance.
+
+    The Gemma should aim to clarify user queries whenever necessary, providing detailed and comprehensive answers. It should ask for additional details if the user's query is unclear or lacks specific information needed to give a precise response. The Gemma's responses should be tailored to reflect the professionalism and precision expected in the QA testing field.
+    """
 
     if model is None:
         return jsonify({"response": "Error: LLM model not initialized. Please check server logs."}), 500
@@ -428,7 +473,6 @@ def chat():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             image_file.save(filepath)
             logging.debug(f"Image saved to {filepath}")
-            # For ChatOllama, image paths need to be absolute file URLs
             current_user_message_parts.append({"image": filepath})
         except Exception as e:
             logging.error(f"Error saving image: {e}")
@@ -437,36 +481,34 @@ def chat():
     if not user_input and not image_file:
         return jsonify({"response": "Please enter a message or upload an image."}), 400
 
+    # Add the initial prompt as a system message if chat history is empty
+    # This ensures the model's persona is set at the beginning of the conversation.
+    if not chat_history:
+        chat_history.append({'role': 'system', 'content': initial_prompt})
+        logging.info("Initial system prompt added to chat history.")
+
     # Append current user message to global chat history
-    # This stores the internal representation of the user's turn
     chat_history.append({'role': 'user', 'content': current_user_message_parts})
 
-    # Prepare messages for the ChatOllama model, including previous history.
-    # ChatOllama expects a list of dictionaries where each dictionary represents a message.
-    # For multimodal content, the 'content' key is a list of dictionaries.
+    # Prepare messages for the ChatOllama model
     langchain_messages = []
     for msg in chat_history:
-        if isinstance(msg['content'], list): # Multimodal content (or just structured text)
+        if isinstance(msg['content'], list): # Multimodal content
             langchain_content_parts = []
             for part in msg['content']:
                 if 'text' in part:
                     langchain_content_parts.append({"type": "text", "text": part['text']})
                 if 'image' in part:
-                    # ChatOllama expects image_url with a 'url' key for file paths
+                    # For Ollama's multimodal models, file paths are typically sent as local file URLs
                     langchain_content_parts.append({"type": "image_url", "image_url": {"url": f"file://{os.path.abspath(part['image'])}"}} )
             langchain_messages.append({'role': msg['role'], 'content': langchain_content_parts})
-        else: # Text-only content (e.g., assistant's previous responses)
+        else: # Text-only content (including the initial system prompt and assistant responses)
             langchain_messages.append({'role': msg['role'], 'content': msg['content']})
 
     logging.debug(f"Messages sent to ChatOllama model: {langchain_messages}")
 
     try:
-        # Invoke the ChatOllama model with the prepared messages
-        # ChatOllama.invoke expects a list of messages (or BaseMessage objects)
         response_message = model.invoke(langchain_messages)
-        
-        # The response_message from ChatOllama is a BaseMessage object (e.g., AIMessage)
-        # We need to extract its content attribute.
         response_text = response_message.content 
         logging.debug(f"ChatOllama raw response content: {response_text}")
 
@@ -474,13 +516,10 @@ def chat():
         chat_history.append({'role': 'assistant', 'content': response_text})
         logging.debug(f"Updated chat history: {chat_history}")
 
-        # Send response to the front-end
         return jsonify({"response": response_text})
     except Exception as e:
         logging.error(f"Error invoking ChatOllama model: {e}")
         return jsonify({"response": f"Error: {str(e)}. Ensure Ollama server is running and model ('llava') is downloaded."}), 500
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
