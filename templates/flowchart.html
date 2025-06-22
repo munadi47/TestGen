@@ -16,6 +16,7 @@
     </div>
     
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Feature cards remain the same -->
         <div class="card feature-card p-6">
             <div class="flex items-center mb-4">
                 <div class="bg-blue-100 p-3 rounded-full mr-4">
@@ -43,7 +44,7 @@
                 </div>
                 <h3 class="text-lg font-semibold">Generate Test Cases</h3>
             </div>
-            <p class="text-gray-600">Automatically generate well-structured test cases in multiple formats ready for your QA process.</p>
+            <p class="text-gray-600">Automatically generate well-structured test cases ready for your QA process.</p>
         </div>
     </div>
     
@@ -57,12 +58,12 @@
         
         <div id="drop-area">
             <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
-            <p class="font-medium mb-1">Drag & drop your requirements document here</p>
+            <p class="font-medium mb-1">Drag & drop your flowchart document here</p>
             <p class="text-sm text-gray-500 mb-4">Supported formats: JPG, JPEG, PNG</p>
             <label for="file-input" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer">
                 <i class="fas fa-folder-open mr-2"></i> Browse Files
             </label>
-            <input type="file" id="file-input" accept=".jpg,.docx,.txt,.xlsx" class="hidden">
+            <input type="file" id="file-input" accept="image/jpeg,image/png" class="hidden">
             <div id="file-preview" class="mt-4 hidden"></div>
         </div>
         
@@ -76,20 +77,12 @@
     <div class="card p-6">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-bold">Generated Test Case Files</h2>
-            <div class="flex space-x-2">
-                <button class="px-3 py-1 border border-gray-300 rounded-lg text-sm">
-                    <i class="fas fa-filter mr-1"></i> Filter
-                </button>
-                <button class="px-3 py-1 border border-gray-300 rounded-lg text-sm">
-                    <i class="fas fa-sort mr-1"></i> Sort
-                </button>
-            </div>
         </div>
         
         <div id="generated-files">
             <div class="text-center py-10 text-gray-500">
                 <i class="fas fa-folder-open text-4xl mb-3"></i>
-                <p>No generated test cases yet. Upload a requirements document and click "Generate Test Cases" to get started.</p>
+                <p>No generated test cases yet. Upload a flowchart document and click "Generate Test Cases" to get started.</p>
             </div>
         </div>
     </div>
@@ -101,13 +94,13 @@
     const dropArea = document.getElementById('drop-area');
     const fileInput = document.getElementById('file-input');
     const filePreview = document.getElementById('file-preview');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
     const generatedFiles = document.getElementById('generated-files');
     const clearFilesBtn = document.getElementById('clear-files-btn');
     const generateTestsBtn = document.getElementById('generate-tests-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
     
+    let currentFile = null;
+
     // File upload functionality
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
@@ -119,32 +112,15 @@
     }
     
     ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false);
+        dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'), false);
     });
     
     ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false);
+        dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
     });
     
-    function highlight() {
-        dropArea.classList.add('highlight');
-    }
-    
-    function unhighlight() {
-        dropArea.classList.remove('highlight');
-    }
-    
-    dropArea.addEventListener('drop', handleDrop, false);
-    
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-    }
-    
-    fileInput.addEventListener('change', function() {
-        handleFiles(this.files);
-    });
+    dropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
     
     function handleFiles(files) {
         if (files.length) {
@@ -152,22 +128,14 @@
             const validExtensions = ['image/jpeg', 'image/png'];
 
             if (validExtensions.includes(file.type)) {
-                filePreview.innerHTML = '';
+                currentFile = file; // Store the file
+                filePreview.innerHTML = ''; // Clear previous preview
 
                 const fileInfo = document.createElement('div');
                 fileInfo.className = 'flex items-center p-3 bg-gray-50 rounded-lg';
 
-                let icon;
-                if (file.type === 'image/jpeg') {
-                    icon = 'fa-file-image text-blue-600';
-                } else if (file.type === 'image/png') {
-                    icon = 'fa-file-image text-green-600';
-                } else {
-                    icon = 'fa-file text-gray-600';
-                }
-
                 fileInfo.innerHTML = `
-                    <i class="fas ${icon} text-2xl mr-3"></i>
+                    <i class="fas fa-file-image text-2xl mr-3 text-blue-600"></i>
                     <div>
                         <p class="font-medium">${file.name}</p>
                         <p class="text-sm text-gray-500">${formatFileSize(file.size)}</p>
@@ -180,19 +148,21 @@
                 filePreview.appendChild(fileInfo);
                 filePreview.classList.remove('hidden');
 
-                // Add event listener to remove button
-                document.getElementById('remove-file-btn').addEventListener('click', function () {
-                    filePreview.innerHTML = '';
-                    filePreview.classList.add('hidden');
-                    fileInput.value = '';
-                });
+                document.getElementById('remove-file-btn').addEventListener('click', clearFilePreview);
             } else {
-                // Using a custom modal/message box instead of alert()
                 showCustomMessage('Unsupported File Type', 'Please upload a supported file format (JPG, JPEG, PNG).');
+                clearFilePreview();
             }
         }
-
     }
+
+    function clearFilePreview() {
+        filePreview.innerHTML = '';
+        filePreview.classList.add('hidden');
+        fileInput.value = '';
+        currentFile = null;
+    }
+
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -201,212 +171,136 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
     
-    // Clear files button
-    clearFilesBtn.addEventListener('click', function() {
-        if (filePreview.innerHTML !== '') {
-            // Using a custom modal/message box instead of confirm()
-            showCustomConfirm('Confirm Removal', 'Are you sure you want to remove the uploaded file?', function() {
-                filePreview.innerHTML = '';
-                filePreview.classList.add('hidden');
-                fileInput.value = '';
-            });
+    clearFilesBtn.addEventListener('click', () => {
+        if (currentFile) {
+            showCustomConfirm('Confirm Removal', 'Are you sure you want to remove the uploaded file?', clearFilePreview);
         } else {
-            // Using a custom modal/message box instead of alert()
             showCustomMessage('No File', 'No file to remove.');
         }
     });
     
-    // Generate tests button
-    generateTestsBtn.addEventListener('click', function() {
-        if (filePreview.innerHTML === '') {
-            // Using a custom modal/message box instead of alert()
-            showCustomMessage('No Document', 'Please upload a requirements document first.');
+    generateTestsBtn.addEventListener('click', () => {
+        if (!currentFile) {
+            showCustomMessage('No Document', 'Please upload a flowchart document first.');
             return;
         }
+
+        showLoading('Generating Test Cases', 'Our AI is analyzing your flowchart and generating test cases...');
         
-        showLoading('Generating Test Cases', 'Our AI is analyzing your requirements and generating comprehensive test cases...');
-        
-        // Simulate progress
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.random() * 10;
-            if (progress > 100) progress = 100;
-            updateProgress(progress);
-            
-            if (progress === 100) {
-                clearInterval(interval);
-                setTimeout(() => {
-                    hideLoading();
-                    showGeneratedFiles();
-                }, 500);
+        const formData = new FormData();
+        formData.append('file', currentFile);
+
+        fetch('/generate_test_cases', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { 
+                    throw new Error(err.error || `Server responded with status: ${response.status}`)
+                });
             }
-        }, 300);
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = "test_cases.xlsx";
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                // *** FIX: Check if filenameMatch is not null before accessing its properties ***
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            return response.blob().then(blob => ({blob, filename}));
+        })
+        .then(({blob, filename}) => {
+            hideLoading();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showGeneratedFile(filename, blob.size);
+            showCustomMessage('Success', `Test cases file "${filename}" has been generated and downloaded.`);
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showCustomMessage('Generation Failed', `An error occurred: ${error.message}`);
+        });
     });
     
-    // Loading screen functions
     function showLoading(title, message) {
         document.getElementById('loading-title').textContent = title;
         document.getElementById('loading-message').textContent = message;
         loadingOverlay.style.display = 'flex';
-        progressBar.style.width = '0%';
-        progressText.textContent = '0% complete';
-    }
-    
-    function updateProgress(percent) {
-        progressBar.style.width = percent + '%';
-        progressText.textContent = Math.round(percent) + '% complete';
     }
     
     function hideLoading() {
         loadingOverlay.style.display = 'none';
     }
     
-    // Show generated test case files
-    function showGeneratedFiles() {
-        // Sample generated files data
-        const files = [
-            {
-                name: 'Fund_Transfer_Test_Cases.xlsx',
-                type: 'excel',
-                size: '245 KB',
-                date: 'Just now',
-                testCases: 24,
-                coverage: 'High'
-            },
-            {
-                name: 'Login_Module_Test_Cases.docx',
-                type: 'word',
-                size: '178 KB',
-                date: 'Just now',
-                testCases: 18,
-                coverage: 'Medium'
-            },
-            {
-                name: 'Test_Case_Report.pdf',
-                type: 'pdf',
-                size: '312 KB',
-                date: 'Just now',
-                testCases: 42,
-                coverage: 'High'
-            },
-            {
-                name: 'Account_Management_Test_Cases.xlsx',
-                type: 'excel',
-                size: '210 KB',
-                date: 'Just now',
-                testCases: 32,
-                coverage: 'High'
-            }
-        ];
-        
-        if (files.length === 0) {
-            generatedFiles.innerHTML = `
-                <div class="text-center py-10 text-gray-500">
-                    <i class="fas fa-folder-open text-4xl mb-3"></i>
-                    <p>No generated test cases yet. Upload a requirements document and click "Generate Test Cases" to get started.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        let html = '';
-        files.forEach(file => {
-            let icon, coverageColor;
-            switch(file.type) {
-                case 'excel':
-                    icon = 'fa-file-excel text-green-600';
-                    break;
-                case 'word':
-                    icon = 'fa-file-word text-blue-600';
-                    break;
-                case 'pdf':
-                    icon = 'fa-file-pdf text-red-600';
-                    break;
-                default:
-                    icon = 'fa-file text-gray-600';
-            }
-            
-            switch(file.coverage) {
-                case 'High':
-                    coverageColor = 'bg-green-100 text-green-800';
-                    break;
-                case 'Medium':
-                    coverageColor = 'bg-yellow-100 text-yellow-800';
-                    break;
-                case 'Low':
-                    coverageColor = 'bg-red-100 text-red-800';
-                    break;
-                default:
-                    coverageColor = 'bg-gray-100 text-gray-800';
-            }
-            
-            html += `
-                <div class="test-case-file">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center">
-                            <i class="fas ${icon} text-2xl mr-3"></i>
-                            <div>
-                                <p class="font-medium">${file.name}</p>
-                                <p class="text-sm text-gray-500">${file.size} • ${file.date}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center">
-                            <span class="${coverageColor} text-xs px-2 py-1 rounded mr-3">${file.coverage} Coverage</span>
-                            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-3">${file.testCases} test cases</span>
-                            <button class="text-blue-600 hover:text-blue-800 mr-3">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button class="text-blue-600 hover:text-blue-800">
-                                <i class="fas fa-share-alt"></i>
-                            </button>
+    function showGeneratedFile(fileName, fileSize) {
+        generatedFiles.innerHTML = `
+            <div class="test-case-file">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-file-excel text-2xl mr-3 text-green-600"></i>
+                        <div>
+                            <p class="font-medium">${fileName}</p>
+                            <p class="text-sm text-gray-500">${formatFileSize(fileSize)} • Just now</p>
                         </div>
                     </div>
+                    <div class="flex items-center">
+                        <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Downloaded</span>
+                    </div>
                 </div>
-            `;
-        });
-        
-        generatedFiles.innerHTML = html;
+            </div>
+        `;
     }
 
-    // Custom alert/confirm functions (replace native alert/confirm)
+    // Custom alert/confirm functions
     function showCustomMessage(title, message) {
+        const modalId = `custom-modal-${Date.now()}`;
         const modalHtml = `
-            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+            <div id="${modalId}" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
                 <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
                     <h3 class="text-lg font-bold mb-4">${title}</h3>
                     <p class="text-gray-700 mb-6">${message}</p>
-                    <button id="modal-ok-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">OK</button>
+                    <button id="modal-ok-btn-${modalId}" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-blue-700">OK</button>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        document.getElementById('modal-ok-btn').addEventListener('click', function() {
-            document.getElementById('custom-modal').remove();
+        document.getElementById(`modal-ok-btn-${modalId}`).addEventListener('click', () => {
+            document.getElementById(modalId).remove();
         });
     }
 
     function showCustomConfirm(title, message, onConfirm) {
+        const modalId = `custom-modal-${Date.now()}`;
         const modalHtml = `
-            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+            <div id="${modalId}" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
                 <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
                     <h3 class="text-lg font-bold mb-4">${title}</h3>
                     <p class="text-gray-700 mb-6">${message}</p>
                     <div class="flex justify-center space-x-4">
-                        <button id="modal-cancel-btn" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
-                        <button id="modal-confirm-btn" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700">Confirm</button>
+                        <button id="modal-cancel-btn-${modalId}" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button id="modal-confirm-btn-${modalId}" class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-blue-700">Confirm</button>
                     </div>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        document.getElementById('modal-confirm-btn').addEventListener('click', function() {
-            document.getElementById('custom-modal').remove();
-            if (typeof onConfirm === 'function') {
-                onConfirm();
-            }
+        document.getElementById(`modal-confirm-btn-${modalId}`).addEventListener('click', () => {
+            document.getElementById(modalId).remove();
+            if (typeof onConfirm === 'function') onConfirm();
         });
-        document.getElementById('modal-cancel-btn').addEventListener('click', function() {
-            document.getElementById('custom-modal').remove();
+        document.getElementById(`modal-cancel-btn-${modalId}`).addEventListener('click', () => {
+            document.getElementById(modalId).remove();
         });
     }
 </script>
