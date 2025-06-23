@@ -91,10 +91,10 @@ chat_history = []
 logging.info("Chat history initialized.")
 
 # --- API Configuration ---
-GEMINI_API_KEY = 'AIzaSyBv81a6bSC4SqdkzZ8nej6zlgyqJGhL6Aw'
+GEMINI_API_KEY = 'xxx'
 GEMINI_MODEL_NAME = 'gemma-3-27b-it'
 
-ROBOFLOW_API_KEY = 'wSWpT02lhyi83iIpUmMU'
+ROBOFLOW_API_KEY = 'xxx'
 ROBOFLOW_MODEL_ID = 'flow-chart-detection/2' 
 
 # --- Initializations ---
