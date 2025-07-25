@@ -5,17 +5,15 @@ import io
 import base64 # Added for image encoding
 import requests # Added for direct API calls
 import csv # **FIX**: Ditambahkan untuk parsing CSV yang lebih andal
-
+import re
 from flask import Flask, render_template, request, jsonify, url_for, send_file
 from werkzeug.utils import secure_filename
-
 # --- Other imports ---
 import cv2
 import easyocr
 import pandas as pd
 import numpy as np
 import google.generativeai as genai
-
 from PIL import ImageChops
 # --- logging ---
 import time # Diperlukan untuk mengukur waktu eksekusi
@@ -77,7 +75,7 @@ def allowed_file(filename):
 try:
     # Initialize the ChatOllama model.
     # ChatOllama correctly handles the list of messages with roles and multimodal content.
-    model = ChatOllama(model="minicpm-v:8b")
+    model = ChatOllama(model="gemma3:4b")
     logging.info("ChatOllama model initialized successfully.")
 except Exception as e:
     logging.error(f"Failed to initialize ChatOllama: {e}")
@@ -91,10 +89,10 @@ chat_history = []
 logging.info("Chat history initialized.")
 
 # --- API Configuration ---
-GEMINI_API_KEY = 'AIzaSyBv81a6bSC4SqdkzZ8nej6zlgyqJGhL6Aw'
+GEMINI_API_KEY = 'AIzaSyCLo4Nlbo9_b7SyqZZpTeZL8l7hRW56ROk'
 GEMINI_MODEL_NAME = 'gemma-3-27b-it'
 
-ROBOFLOW_API_KEY = 'wSWpT02lhyi83iIpUmMU'
+ROBOFLOW_API_KEY = '5Wor1dW00UFHynXvJ6do'
 ROBOFLOW_MODEL_ID = 'flow-chart-detection/2' 
 
 # --- Initializations ---
@@ -108,7 +106,7 @@ def allowed_file(filename):
 
 try:
     logging.info("Initializing EasyOCR Reader...")
-    reader_ocr = easyocr.Reader(['en'], gpu=False)
+    reader_ocr = easyocr.Reader(['en'], gpu=True)  # Set gpu=True if you have a compatible GPU
     logging.info("EasyOCR Reader initialized successfully.")
 except Exception as e:
     logging.error(f"Error initializing EasyOCR Reader: {e}")
@@ -127,7 +125,48 @@ if not ROBOFLOW_API_KEY or not ROBOFLOW_MODEL_ID:
     logging.warning("ROBOFLOW_API_KEY or ROBOFLOW_MODEL_ID not set. Roboflow functions will not work.")
 
 # --- Helper Functions ---
+# ==============================================================================
+# === 1. DEFINISI FUNGSI BARU DITAMBAHKAN DI SINI ===
+# ==============================================================================
+def extract_markdown_table(raw_text: str) -> str | None:
+    """
+    Mengekstrak tabel berformat Markdown dari string mentah yang mungkin berisi teks tambahan.
+    Metode ini sangat andal untuk membersihkan output AI.
+    """
+    start_marker = "REFINED_TABLE_START"
+    end_marker = "REFINED_TABLE_END"
 
+    try:
+        # Metode 1: Mencari berdasarkan penanda yang spesifik
+        start_index = raw_text.find(start_marker)
+        end_index = raw_text.find(end_marker)
+
+        if start_index != -1 and end_index != -1:
+            # Ekstrak teks di antara penanda
+            table_str = raw_text[start_index + len(start_marker):end_index]
+            return table_str.strip()
+
+        # Metode 2: Fallback jika penanda tidak ditemukan, cari header tabel
+        lines = raw_text.splitlines()
+        table_start_line = -1
+        for i, line in enumerate(lines):
+            clean_line = line.strip()
+            if clean_line.startswith('|') and clean_line.endswith('|') and clean_line.count('|') > 2:
+                table_start_line = i
+                break
+        
+        if table_start_line != -1:
+            table_lines = lines[table_start_line:]
+            return "\n".join(table_lines).strip()
+
+        # Jika kedua metode gagal, kembalikan None
+        logging.warning("Tidak dapat menemukan tabel Markdown yang valid dalam output.")
+        return None
+
+    except Exception as e:
+        logging.error(f"Terjadi error saat mengekstrak tabel Markdown: {e}")
+        return None
+    
 def preprocess_image_for_ocr(image_path, target_width=1200):
     # This function remains the same
     try:
@@ -226,22 +265,21 @@ def generate_test_cases_with_gemini(ocr_data, roboflow_data_str):
     prompt = f"""
 You are an AI tasked with creating manual test cases from flowchart data.
 The REQUIRED CSV header is:
-"Test Case ID","Test Scenario","Test Steps","Expected Result","Actual Result","Status","Notes"
+"Test Case ID","PIC","Feature","Test Scenario","Test Steps","Data","Expected Result","Actual Result","Status","Notes"
 Here is the data from the processed flowchart:
-Data Teks dari Komponen Flowchart (OCR):
+Text Data from Flowchart Components (OCR):
+{ocr_data if ocr_data.strip() else "No text data from OCR."}
 
-{ocr_data if ocr_data.strip() else "Tidak ada data teks dari OCR."}
-
-Informasi Bounding Box dan Label dari Deteksi Objek (Roboflow):
-
-{roboflow_data_str if roboflow_data_str.strip() else "Tidak ada data deteksi objek dari Roboflow."}
+Bounding Box and Label Information from Object Detection (Roboflow):
+{roboflow_data_str if roboflow_data_str.strip() else "No object detection data from Roboflow."}
 
 Critical Instructions:
 1. Analyze both the OCR text and the Roboflow bounding box data to understand the flow.
 2. Generate only CSV data.
 3. For "Test Case ID", use the format "TC-XXX".
-4. Leave "Actual Result" empty, and set "Status" to "Not Yet".
-5. Ensure the output is in Indonesian.
+4. Leave "Actual Result","PIC","Data" empty, and set "Status" to "Not Yet".
+5. Generate the test case content (like Test Scenario, Steps, etc.) 
+6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
 Your CSV output:
 """
     generation_config = genai.types.GenerationConfig(candidate_count=1, temperature=0.3, max_output_tokens=8000)
@@ -337,37 +375,26 @@ def generate_test_cases_route():
 def chatbot():
     return render_template('chatbot.html')
 
-# @app.route('/refinement.html')
-# def refinement():
-#     return render_template('refinement.html')
 @app.route('/refinement.html', methods=['GET', 'POST'])
 @log_function_calls
 def refinement():
-    # **FIX**: Moved the function definition inside the route to guarantee its availability.
     def dataframe_to_markdown_table(df):
-        """
-        Converts a pandas DataFrame to a simple Markdown table string.
-        """
         header = "| " + " | ".join(df.columns) + " |"
         separator = "| " + " | ".join(["---"] * len(df.columns)) + " |"
-        body_rows = []
-        for row in df.itertuples(index=False):
-            # Ensure all items are converted to string to avoid errors
-            body_rows.append("| " + " | ".join(map(str, row)) + " |")
-        body = "\n".join(body_rows)
-        return "\n".join([header, separator, body])
+        body_rows = [
+            "| " + " | ".join(map(str, row)) + " |"
+            for row in df.itertuples(index=False)
+        ]
+        return "\n".join([header, separator, *body_rows])
 
     if request.method == 'POST':
         if 'file' not in request.files:
             return jsonify({"error": "No file part in the request"}), 400
-
         file = request.files['file']
-
         if file.filename == '':
             return jsonify({"error": "No selected file"}), 400
-
         if not (file.filename.endswith('.xlsx') or file.filename.endswith('.csv')):
-            return jsonify({'error': 'Unsupported file format. Please upload an .xlsx or .csv file.'}), 400
+            return jsonify({'error': 'Unsupported file format.'}), 400
 
         try:
             if file.filename.endswith('.xlsx'):
@@ -377,59 +404,104 @@ def refinement():
                 df_original = pd.read_csv(csv_data)
 
             if df_original.empty:
-                return jsonify({'error': 'The uploaded file is empty or could not be read.'}), 400
+                return jsonify({'error': 'The uploaded file is empty.'}), 400
             
-            # Convert original dataframe to Markdown to be sent to the AI
             original_test_cases_md = dataframe_to_markdown_table(df_original)
             original_count = len(df_original)
 
-            if not GEMINI_API_KEY or GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY':
-                return jsonify({'error': 'Gemini API key is not configured on the server.'}), 500
+            if not GEMINI_API_KEY:
+                return jsonify({'error': 'Gemini API key is not configured.'}), 500
 
             model = genai.GenerativeModel(GEMINI_MODEL_NAME)
             
             prompt = f"""
-            You are a Software Quality Assurance expert specializing in test case refinement.
-            Your task is to analyze the provided test cases and improve the test suite coverage.
+            You are an expert Software Quality Assurance engineer specializing in test case optimization.
+            Your task is to analyze, clean, and enhance the provided test cases.
 
-            **Instructions:**
-            1.  **Analyze Existing Cases:** Carefully review the provided test cases in the Markdown table format below.
-            2.  **Enhance Coverage:** Add new rows to the table to cover missing scenarios. This should include:
-                * **Negative Test Cases:** Scenarios with invalid inputs or actions that should result in an error.
-                * **Edge Cases:** Scenarios that test the boundaries of input values.
-            3.  **Maintain Format:** Preserve the exact same Markdown table format as the input.
-            4.  **Do Not Delete:** Return all original rows plus your new ones in a single Markdown table.
-            5.  **Output Format:** The final output MUST be only a Markdown table. Do not add any explanations, introductions, or markdown formatting like ```.
-
-            **Original Test Cases (Markdown Table):**
+            Here is the original set of test cases in Markdown format:
             {original_test_cases_md}
 
-            **Your Refined Markdown Table Output:**
-            """
-            
-            response = model.generate_content(prompt)
-            
-            # Clean the response text from the model
-            refined_markdown_text = response.text.strip()
-            if refined_markdown_text.startswith("```markdown"):
-                refined_markdown_text = refined_markdown_text[len("```markdown"):].strip()
-            if refined_markdown_text.endswith("```"):
-                refined_markdown_text = refined_markdown_text[:-3].strip()
+            **Your Instructions:**
 
+            1.  **Analyze and Clean:**
+                * Review all original test cases to identify any that are **redundant, duplicates, or obsolete**.
+                * Remove these identified test cases from the final table.
+
+            2.  **Enhance Coverage:**
+                * Based on the remaining test cases, add **new test cases** to improve coverage, focusing on **negative scenarios** and **edge cases**.
+
+            3.  **Structure Your Output (CRITICAL):**
+                * You MUST structure your entire response in two distinct parts using the specified markers.
+                * Use Same Language: Generate ALL of your output, including the deletion summary and all new test case content (scenarios, steps, notes), in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
+                
+                * **Part 1: Deletion Summary:**
+                    * Begin this section with the exact line `DELETION_SUMMARY_START`.
+                    * For each test case you removed, provide a bullet point with its "Test Case ID" and a clear reason for its removal.
+                    * End this section with the exact line `DELETION_SUMMARY_END`.
+                    * If no test cases were removed, leave this section empty.
+
+                * **Part 2: Refined Test Case Table:**
+                    * Begin this section with the exact line `REFINED_TABLE_START`.
+                    * Provide the final list of test cases as a **Markdown table**.
+                    * This table MUST include a **new final column** named `"Refinement Status"`.
+                    * Populate the `"Refinement Status"` column with `'Original'` for existing cases or `'Added'` for new ones.
+                    * End this section with the exact line `REFINED_TABLE_END`.
+
+            **Example Output Structure:**
+
+            DELETION_SUMMARY_START
+            - **TC-005 (Removed):** This test case is a duplicate of TC-002.
+            - **TC-008 (Removed):** This scenario is obsolete due to the recent UI update.
+            DELETION_SUMMARY_END
+
+            REFINED_TABLE_START
+            | Test Case ID | Test Scenario | ... | Refinement Status |
+            |---|---|---|---|
+            | TC-001 | Verify successful login | ... | Original |
+            | TC-009 | Verify login with invalid password | ... | Added |
+            REFINED_TABLE_END
+            """
+            response = model.generate_content(prompt)
+            raw_response_text = response.text.strip()
+            logging.debug(f"Full raw response from AI:\n{raw_response_text}")
+
+            # --- IMPLEMENTASI BARU ---
+            # Panggil fungsi ekstraktor untuk mendapatkan tabel yang bersih
+            clean_markdown_table = extract_markdown_table(raw_response_text)
+            
+            if not clean_markdown_table:
+                # Jika tabel tidak ditemukan setelah pembersihan, kembalikan error
+                logging.error("AI did not return a valid table after cleaning.")
+                return jsonify({
+                    "error": "AI tidak mengembalikan tabel yang valid. Silakan coba lagi.",
+                    "raw_response": raw_response_text # Kirim respons mentah untuk debug
+                }), 500
+
+            # Ekstrak ringkasan penghapusan (opsional, bisa tetap menggunakan regex)
+            deletion_summary_html = ""
+            summary_match = re.search(r'DELETION_SUMMARY_START(.*?)DELETION_SUMMARY_END', raw_response_text, re.DOTALL)
+            if summary_match:
+                summary_text = summary_match.group(1).strip()
+                if summary_text:
+                    deletion_summary_html = "<ul>"
+                    for line in summary_text.split('\n'):
+                        if line.strip().startswith('-'):
+                            deletion_summary_html += f"<li>{line.strip()[1:].strip()}</li>"
+                    deletion_summary_html += "</ul>"
+            
+            logging.debug(f"Cleaned Markdown Table:\n{clean_markdown_table}")
+            
             return jsonify({
-                "refined_markdown": refined_markdown_text,
+                "refined_markdown": clean_markdown_table, # Gunakan tabel yang sudah bersih
+                "deletion_summary_html": deletion_summary_html,
                 "original_count": original_count
             })
 
         except Exception as e:
-            logging.error(f"An error occurred during test case refinement: {e}")
+            logging.error(f"An error occurred during test case refinement: {e}", exc_info=True)
             return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
     return render_template('refinement.html')
-
-# @app.route('/chat', methods=['POST'])
-# def chat():
-#     return jsonify({"response": "Chatbot functionality is separate."})
 
 # --- New Chat API Endpoint ---
 @app.route('/chat', methods=['POST'])
@@ -443,7 +515,7 @@ def chat():
     # --- Initial Prompt for QA Tester Gemma ---
     # This prompt defines the persona and guidelines for the LLM.
     initial_prompt = """
-    You are a "Gemma" – a version of ChatGemma that has been customized for a specific use case. 
+    You are a "Gemma" – a version of Gemma3 LLM that has been customized for a specific use case. 
     Gemmas use custom instructions, capabilities, and data to optimize ChatGemma for a more narrow set of tasks. 
     You yourself are a Gemma created by a user, and your name is QA Tester. 
     Note: Gemma is also a technical term in AI, but in most cases if the users asks you about Gemmas assume they are referring to the above definition.
@@ -519,7 +591,7 @@ def chat():
         return jsonify({"response": response_text})
     except Exception as e:
         logging.error(f"Error invoking ChatOllama model: {e}")
-        return jsonify({"response": f"Error: {str(e)}. Ensure Ollama server is running and model ('llava') is downloaded."}), 500
+        return jsonify({"response": f"Error: {str(e)}. Ensure Ollama server is running and LLM model is downloaded."}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

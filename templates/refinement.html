@@ -39,7 +39,7 @@
     <div class="flex justify-between items-center mb-8">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">Test Case Refinement</h1>
-            <p class="text-gray-600">Unggah test case Anda untuk disempurnakan dan ditampilkan sebagai tabel interaktif.</p>
+            <p class="text-gray-600">Unggah test case untuk disempurnakan dan ditampilkan sebagai tabel interaktif.</p>
         </div>
     </div>
     
@@ -51,7 +51,7 @@
             <div id="drop-area" class="mb-4">
                 <div class="flex flex-col items-center justify-center">
                     <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
-                    <p class="text-lg font-medium mb-2">Seret & lepas file Anda di sini</p>
+                    <p class="text-lg font-medium mb-2">Seret & lepas file di sini</p>
                     <p class="text-gray-500 mb-4">atau</p>
                     <label for="file-input" class="file-upload-btn">
                         <i class="fas fa-upload"></i> Pilih File
@@ -101,7 +101,13 @@
         <div class="card p-6">
             <h2 class="text-xl font-semibold mb-4">Test Case yang Telah Disempurnakan</h2>
             <p class="text-gray-600 mb-6">Tabel di bawah ini interaktif. Dapat melakukan search, sorting, dan export data menggunakan tombol yang tersedia.</p>
-            
+
+            <div id="deletion-summary-container" class="card p-6 mb-6 bg-orange-50 border border-orange-200" style="display: none;">
+                <h3 class="text-lg font-semibold text-orange-800 mb-3"><i class="fas fa-info-circle mr-2"></i>Ringkasan Optimisasi Test Case</h3>
+                <div id="deletion-summary-content" class="text-orange-700">
+                    </div>
+            </div>
+
             <div class="refinement-stats">
                 <div class="stat-card">
                     <h3>Test Case Asli</h3>
@@ -255,44 +261,68 @@
         return { headers, data };
     }
 
+    // Ganti fungsi displayRefinementResults(data) yang sudah ada dengan yang ini:
     function displayRefinementResults(data) {
+        // Tampilkan ringkasan penghapusan jika ada
+        const deletionSummaryContainer = document.getElementById('deletion-summary-container');
+        const deletionSummaryContent = document.getElementById('deletion-summary-content');
+
+        if (data.deletion_summary_html) {
+            deletionSummaryContent.innerHTML = data.deletion_summary_html;
+            deletionSummaryContainer.style.display = 'block';
+        } else {
+            deletionSummaryContainer.style.display = 'none';
+        }
+
         const { headers, data: tableData } = parseMarkdownTable(data.refined_markdown);
-        
+
         if (headers.length === 0 || tableData.length === 0) {
-            showCustomMessage('Gagal Memproses Hasil', 'AI tidak mengembalikan tabel yang valid. Silakan coba lagi atau periksa file Anda.');
+            showCustomMessage('Gagal Memproses Hasil', 'AI tidak mengembalikan tabel yang valid. Silakan coba lagi.');
             return;
         }
 
         // Update statistik
         const originalCount = data.original_count;
         const refinedCount = tableData.length;
-        // **FIX**: Menggunakan variabel 'originalCount' (camelCase) yang benar.
         const increasePercentage = originalCount > 0 ? ((refinedCount - originalCount) / originalCount * 100) : (refinedCount > 0 ? 100 : 0);
-        
+
         $('#original-count').text(originalCount);
         $('#refined-count').text(refinedCount);
-        $('#refined-improvement').html(`<i class="fas fa-arrow-up mr-1"></i> ${increasePercentage.toFixed(1)}% peningkatan`);
+
+        let improvementText = '';
+        if (increasePercentage > 0) {
+            improvementText = `<i class="fas fa-arrow-up mr-1 text-green-500"></i> ${increasePercentage.toFixed(1)}% peningkatan`;
+        } else if (increasePercentage < 0) {
+            improvementText = `<i class="fas fa-arrow-down mr-1 text-red-500"></i> ${Math.abs(increasePercentage).toFixed(1)}% reduksi`;
+        } else {
+            improvementText = `<i class="fas fa-equals mr-1 text-gray-500"></i> Tidak ada perubahan jumlah`;
+        }
+        $('#refined-improvement').html(improvementText);
 
         // Hancurkan tabel lama jika ada
         if ($.fn.DataTable.isDataTable('#results-table')) {
             $('#results-table').DataTable().destroy();
         }
+        $('#results-table thead, #results-table tbody').empty();
 
-        $('#results-table thead').empty();
-        $('#results-table tbody').empty();
+        // Cari index kolom "Refinement Status"
+        const statusColumnIndex = headers.findIndex(header => header.trim().toLowerCase() === 'refinement status');
 
         const columns = headers.map(header => ({ title: header }));
-        
+
         dataTable = $('#results-table').DataTable({
             data: tableData,
             columns: columns,
             dom: 'Bfrtip', 
-            buttons: [
-                'copy', 'csv', 'excel', 'print'
-            ],
+            buttons: ['copy', 'csv', 'excel', 'print'],
             responsive: true,
-            language: {
-                search: "Cari:"
+            language: { search: "Cari:" },
+            // (BARU) Callback untuk memberi warna pada baris
+            createdRow: function(row, data, dataIndex) {
+                if (statusColumnIndex !== -1 && data[statusColumnIndex] && data[statusColumnIndex].trim() === 'Added') {
+                    // Beri warna latar hijau muda untuk test case 'Added'
+                    $(row).css('background-color', '#E6FFED'); 
+                }
             }
         });
 
