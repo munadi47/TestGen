@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+<<<<<<< HEAD
     fetch('/refinement.html', { /* ... options ... */ })
     .then(response => response.json())
     .then(data => {
@@ -60,4 +61,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // ... other options
         });
     });
+=======
+>>>>>>> f2932ab2d4915c891891df3692f53c87a830cb1f
 });
