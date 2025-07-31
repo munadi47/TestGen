@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}KB Bank - Test Case Refinement{% endblock %}
+
+{% block content %}
+    <!-- Referensi CSS untuk DataTables dan tombolnya -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
+    <style>
+        /* Styling tambahan agar tombol DataTables menyatu dengan tema */
+        .dt-buttons .dt-button {
+            background-color: #003366 !important;
+            color: white !important;
+            border-radius: 0.5rem !important;
+            padding: 0.5rem 1rem !important;
+            margin-left: 0.5rem !important;
+            border: none !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+            transition: background-color 0.3s;
+        }
+        .dt-buttons .dt-button:hover {
+            background-color: #f7a81b !important;
+        }
+        /* Kontainer untuk hasil, awalnya disembunyikan */
+        .results-container {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .results-container.show {
+            display: block;
+            opacity: 1;
+        }
+        table.dataTable thead th {
+            background-color: #f3f4f6;
+        }
+    </style>
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Test Case Refinement</h1>
+            <p class="text-gray-600">Unggah test case untuk disempurnakan dan ditampilkan sebagai tabel interaktif.</p>
+        </div>
+    </div>
+    
+    <div class="card p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Unggah Test Case</h2>
+        <p class="text-gray-600 mb-6">Unggah file Excel (.xlsx) atau .csv. Hasilnya akan ditampilkan di bawah dan dapat diekspor.</p>
+        
+        <div class="file-upload-container">
+            <div id="drop-area" class="mb-4">
+                <div class="flex flex-col items-center justify-center">
+                    <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
+                    <p class="text-lg font-medium mb-2">Seret & lepas file di sini</p>
+                    <p class="text-gray-500 mb-4">atau</p>
+                    <label for="file-input" class="file-upload-btn">
+                        <i class="fas fa-upload"></i> Pilih File
+                    </label>
+                    <input type="file" id="file-input" accept=".xlsx,.csv" class="hidden">
+                </div>
+            </div>
+            
+            <div id="file-info" class="file-info">
+                <div class="flex items-center">
+                    <i class="fas fa-file-excel text-green-600 text-xl mr-3"></i>
+                    <div>
+                        <p class="font-medium" id="file-name"></p>
+                        <p class="text-sm text-gray-500" id="file-size"></p>
+                    </div>
+                    <button id="remove-file" class="ml-auto text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Opsi Penyempurnaan</h2>
+        <p class="text-gray-600 mb-6">Melakukan pengecekan komprehensif test case:</p>
+    
+        <div class="refinement">
+            <div class="option-card">
+                <h3><i class="fas fa-bolt"></i> Optimisasi</h3>
+                <p class="text-gray-600">Menghilangkan redundansi, menggabungkan kasus serupa, dan meningkatkan efisiensi secara keseluruhan.</p>
+            </div>
+    
+            <div class="option-card">
+                <h3><i class="fas fa-star"></i> Peningkatan Cakupan</h3>
+                <p class="text-gray-600">Menambahkan edge case dan skenario negatif, memastikan cakupan pengujian yang menyeluruh.</p>
+            </div>
+    
+            <div class="option-card">
+                <h3><i class="fas fa-copy"></i> Standardisasi Format</h3>
+                <p class="text-gray-600"> Menerapkan template dan pedoman pemformatan test case standar KB Bank.</p>
+            </div>
+        </div>
+
+    </div>
+    
+    <div id="results-container" class="results-container">
+        <div class="card p-6">
+            <h2 class="text-xl font-semibold mb-4">Test Case yang Telah Disempurnakan</h2>
+            <p class="text-gray-600 mb-6">Tabel di bawah ini interaktif. Dapat melakukan search, sorting, dan export data menggunakan tombol yang tersedia.</p>
+
+            <div id="deletion-summary-container" class="card p-6 mb-6 bg-blue-50 border border-blue-200" style="display: none;">
+                <h3 class="text-lg font-semibold text-blue-800 mb-3"><i class="fas fa-info-circle mr-2"></i>Ringkasan Optimisasi Test Case</h3>
+                <div id="deletion-summary-content" class="text-blue-700">
+                    </div>
+            </div>
+
+            <div class="refinement-stats">
+                <div class="stat-card">
+                    <h3>Test Case Asli</h3>
+                    <div class="value" id="original-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Test Case Hasil Refinement</h3>
+                    <div class="value" id="refined-count">0</div>
+                    <div class="improvement text-green-500" id="refined-improvement">
+                        <i class="fas fa-arrow-up mr-1"></i> 0% peningkatan
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto mt-6">
+                <!-- Tabel kosong ini akan diisi oleh DataTables -->
+                <table id="results-table" class="display" style="width:100%">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+<!-- Referensi JS untuk jQuery, DataTables, dan tombol ekspornya -->
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+<script>
+    // --- Element Selection ---
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const fileNameEl = document.getElementById('file-name');
+    const fileSizeEl = document.getElementById('file-size');
+    const removeFileBtn = document.getElementById('remove-file');
+    const resultsContainer = document.getElementById('results-container');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    let selectedFile = null;
+    let dataTable = null;
+
+    // --- Event Listeners Setup ---
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    ['dragenter', 'dragover'].forEach(eventName => dropArea.addEventListener(eventName, highlight, false));
+    ['dragleave', 'drop'].forEach(eventName => dropArea.addEventListener(eventName, unhighlight, false));
+    
+    dropArea.addEventListener('drop', handleDrop, false);
+    fileInput.addEventListener('change', (e) => e.target.files.length && handleFiles(e.target.files));
+    removeFileBtn.addEventListener('click', removeFile);
+
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+    function highlight() { dropArea.classList.add('highlight'); }
+    function unhighlight() { dropArea.classList.remove('highlight'); }
+    
+    function handleDrop(e) { handleFiles(e.dataTransfer.files); }
+
+    function handleFiles(files) {
+        selectedFile = files[0];
+        const validExtensions = ['.xlsx', '.csv'];
+        const fileName = selectedFile.name;
+        const fileExtension = '.' + fileName.split('.').pop().toLowerCase();
+
+        if (!validExtensions.includes(fileExtension)) {
+            showCustomMessage('Tipe File Tidak Didukung', 'Harap unggah file Excel (.xlsx) atau CSV (.csv).');
+            return;
+        }
+
+        fileNameEl.textContent = fileName;
+        fileSizeEl.textContent = formatFileSize(selectedFile.size);
+        fileInfo.classList.add('show');
+        
+        processFileForRefinement(selectedFile);
+    }
+
+    function removeFile() {
+        selectedFile = null;
+        fileInput.value = '';
+        fileInfo.classList.remove('show');
+        resultsContainer.classList.remove('show');
+        if (dataTable) {
+            dataTable.destroy();
+            $('#results-table thead').empty();
+            $('#results-table tbody').empty();
+        }
+    }
+
+    async function processFileForRefinement(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showLoading('Processing File...', 'Refining your test cases. it may takes 1 - 3 minutes. Please wait...');
+
+        try {
+            const response = await fetch("{{ url_for('refinement') }}", {
+                method: 'POST',
+                body: formData,
+            });
+
+            const resultData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(resultData.error || `Server merespons dengan status: ${response.status}`);
+            }
+
+            displayRefinementResults(resultData);
+
+        } catch (error) {
+            console.error('Error selama proses refinement:', error);
+            showCustomMessage('Proses Gagal', `Terjadi kesalahan: ${error.message}`);
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    // // Fungsi baru untuk mem-parsing tabel Markdown menjadi data JSON
+    // function parseMarkdownTable(markdown) {
+    //     const lines = markdown.trim().split('\n');
+    //     if (lines.length < 2) return { headers: [], data: [] };
+
+    //     const headerLine = lines[0];
+    //     const separatorLine = lines[1];
+        
+    //     if (!headerLine.includes('|') || !separatorLine.includes('-')) {
+    //         console.error("Format markdown tidak valid: header atau separator tidak ditemukan.");
+    //         return { headers: [], data: [] };
+    //     }
+        
+    //     const headers = headerLine.split('|').map(h => h.trim()).filter(h => h);
+    //     const data = [];
+
+    //     for (let i = 2; i < lines.length; i++) {
+    //         const rowValues = lines[i].split('|').map(c => c.trim());
+    //         if (rowValues[0] === "") rowValues.shift();
+    //         if (rowValues[rowValues.length - 1] === "") rowValues.pop();
+            
+    //         if (rowValues.length === headers.length) {
+    //             data.push(rowValues);
+    //         }
+    //     }
+    //     return { headers, data };
+    // }
+
+    function parseMarkdownTable(markdown) {
+    // FIX: Split by newlines only when they precede a table row marker (|)
+    // This prevents splitting content inside a cell.
+    const rows = markdown.trim().split(/\n(?=\s*\|)/);
+
+    if (rows.length < 2) return { headers: [], data: [] };
+
+    // The rest of the logic works on the correctly split 'rows' array
+    const headerLine = rows[0];
+    const separatorLine = rows[1];
+
+    if (!headerLine.includes('|') || !separatorLine.includes('-')) {
+        console.error("Format markdown tidak valid: header atau separator tidak ditemukan.");
+        return { headers: [], data: [] };
+    }
+    
+    const headers = headerLine.split('|').map(h => h.trim()).filter(h => h);
+    const data = [];
+
+    // Start loop at 2 to skip header and separator lines
+    for (let i = 2; i < rows.length; i++) {
+        const rowLine = rows[i];
+        
+        // Split the full row string by '|'
+        const rowValues = rowLine.split('|').map(c => c.trim());
+
+        // Remove the empty strings from the start and end
+        if (rowValues[0] === "") rowValues.shift();
+        if (rowValues[rowValues.length - 1] === "") rowValues.pop();
+        
+        if (rowValues.length === headers.length) {
+            data.push(rowValues);
+        } else {
+            console.warn("Skipping malformed row:", rowLine);
+        }
+    }
+    return { headers, data };
+}
+
+    // Ganti fungsi displayRefinementResults(data) yang sudah ada dengan yang ini:
+    function displayRefinementResults(data) {
+        // Tampilkan ringkasan penghapusan jika ada
+        const deletionSummaryContainer = document.getElementById('deletion-summary-container');
+        const deletionSummaryContent = document.getElementById('deletion-summary-content');
+
+        if (data.deletion_summary_html) {
+            deletionSummaryContent.innerHTML = data.deletion_summary_html;
+            deletionSummaryContainer.style.display = 'block';
+        } else {
+            deletionSummaryContainer.style.display = 'none';
+        }
+
+        const { headers, data: tableData } = parseMarkdownTable(data.refined_markdown);
+
+        if (headers.length === 0 || tableData.length === 0) {
+            showCustomMessage('Gagal Memproses Hasil', 'AI tidak mengembalikan tabel yang valid. Silakan coba lagi.');
+            return;
+        }
+
+        // Update statistik
+        const originalCount = data.original_count;
+        const refinedCount = tableData.length;
+        const increasePercentage = originalCount > 0 ? ((refinedCount - originalCount) / originalCount * 100) : (refinedCount > 0 ? 100 : 0);
+
+        $('#original-count').text(originalCount);
+        $('#refined-count').text(refinedCount);
+
+        let improvementText = '';
+        if (increasePercentage > 0) {
+            improvementText = `<i class="fas fa-arrow-up mr-1 text-green-500"></i> ${increasePercentage.toFixed(1)}% peningkatan`;
+        } else if (increasePercentage < 0) {
+            improvementText = `<i class="fas fa-arrow-down mr-1 text-red-500"></i> ${Math.abs(increasePercentage).toFixed(1)}% reduksi`;
+        } else {
+            improvementText = `<i class="fas fa-equals mr-1 text-gray-500"></i> Tidak ada perubahan jumlah`;
+        }
+        $('#refined-improvement').html(improvementText);
+
+        // Hancurkan tabel lama jika ada
+        if ($.fn.DataTable.isDataTable('#results-table')) {
+            $('#results-table').DataTable().destroy();
+        }
+        $('#results-table thead, #results-table tbody').empty();
+
+        // Cari index kolom "Refinement Status"
+        const statusColumnIndex = headers.findIndex(header => header.trim().toLowerCase() === 'refinement status');
+
+        const columns = headers.map(header => ({ title: header }));
+
+        dataTable = $('#results-table').DataTable({
+            data: tableData,
+            columns: columns,
+            dom: 'Bfrtip', 
+            buttons: ['copy', 'csv', 'excel', 'print'],
+            responsive: true,
+            language: { search: "Cari:" },
+            // (BARU) Callback untuk memberi warna pada baris
+            createdRow: function(row, data, dataIndex) {
+                // if (statusColumnIndex !== -1 && data[statusColumnIndex] && data[statusColumnIndex].trim() === 'Added') {
+                //     // Beri warna latar hijau muda untuk test case 'Added'
+                //     $(row).css('background-color', '#E6FFED'); 
+                // }
+                if (statusColumnIndex !== -1 && data[statusColumnIndex]) {
+                    const status = data[statusColumnIndex].trim();
+                    if (status === 'Added') {
+                        // Beri warna latar hijau muda untuk test case 'Added'
+                        $(row).css('background-color', '#E6FFED');
+                    } else if (status === 'Updated') {
+                        // Beri warna latar kuning muda untuk test case 'Updated'
+                        $(row).css('background-color', '#F9F9C7');
+                    }
+                }
+            }
+        });
+
+        resultsContainer.classList.add('show');
+        resultsContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // --- Utility Functions ---
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function showLoading(title = 'Memproses Permintaan', message = 'Mohon tunggu...') {
+        document.getElementById('loading-title').textContent = title;
+        document.getElementById('loading-message').textContent = message;
+        loadingOverlay.style.display = 'flex'; 
+    }
+
+    function hideLoading() { loadingOverlay.style.display = 'none'; }
+    
+    function showCustomMessage(title, message) {
+        const existingModal = document.getElementById('custom-modal');
+        if (existingModal) existingModal.remove();
+
+        const modalHtml = `
+            <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <button id="modal-ok-btn" class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-yellow-500">OK</button>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.getElementById('modal-ok-btn').addEventListener('click', () => {
+            document.getElementById('custom-modal').remove();
+        });
+    }
+</script>
+{% endblock %}

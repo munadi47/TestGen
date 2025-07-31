@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}KB Bank - QA Chatbot{% endblock %}
+
+{% block content %}
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">KB QA Assistant</h1>
+            <p class="text-gray-600">AI-powered chatbot for your quality assurance needs</p>
+        </div>
+        <div class="flex items-center">
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center">
+                <i class="fas fa-question-circle mr-2"></i> Help
+            </button>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-yellow-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-lightbulb text-yellow-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Test Guidance</h3>
+            </div>
+            <p class="text-gray-600">Get expert advice on test strategies, methodologies, and best practices for your specific needs.</p>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-green-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-code text-green-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Code Examples</h3>
+            </div>
+            <p class="text-gray-600">Request ready-to-use code snippets for automation frameworks and test scripts.</p>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-purple-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-book text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Documentation</h3>
+            </div>
+            <p class="text-gray-600">Access KB Bank's testing standards, policies, and documentation instantly.</p>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="chat-header">
+            <div class="chat-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div>
+                <div class="chat-title">KB QA Assistant</div>
+                <div class="chat-status">Online</div>
+            </div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message message-bot">
+                    <div class="message-content bot-message">
+                        Hello! I'm your KB QA Assistant. How can I help you with your quality assurance tasks today?
+                    </div>
+                    <div class="message-time">Today, 10:00 AM</div>
+                </div>
+                
+                <div class="message message-user">
+                    <div class="message-content user-message">
+                        Hi! Can you help me create a test case for login functionality?
+                    </div>
+                    <div class="message-time">Today, 10:02 AM</div>
+                </div>
+                
+                <div class="message message-bot">
+                    <div class="message-content bot-message">
+                        Of course! Here's a basic test case for login functionality:
+                        <br><br>
+                        <strong>Test Case ID:</strong> TC_LOGIN_001<br>
+                        <strong>Description:</strong> Verify successful login with valid credentials<br>
+                        <strong>Steps:</strong><br>
+                        1. Navigate to login page<br>
+                        2. Enter valid username<br>
+                        3. Enter valid password<br>
+                        4. Click login button<br>
+                        <strong>Expected Result:</strong> User is redirected to dashboard page<br>
+                        <br>
+                        Would you like me to add more test cases for different scenarios?
+                    </div>
+                    <div class="message-time">Today, 10:03 AM</div>
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <textarea id="message-input" placeholder="Type your message here..." rows="1"></textarea>
+                <button class="send-button" id="send-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+    const chatMessages = document.getElementById('chat-messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const loadingOverlay = document.getElementById('loading-overlay');
+
+    // Auto-resize textarea as user types
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+    
+    // Send message on Enter key (but allow Shift+Enter for new lines)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Send message on button click
+    sendButton.addEventListener('click', sendMessage);
+    
+    function sendMessage() {
+        const message = messageInput.value.trim();
+        if (message === '') return;
+        
+        // Add user message to chat
+        addMessage(message, 'user');
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        
+        // Show loading indicator
+        showLoadingIndicator();
+        
+        // Simulate bot response after delay
+        setTimeout(() => {
+            hideLoadingIndicator();
+            
+            // Generate bot response based on user input
+            const botResponse = generateBotResponse(message);
+            addMessage(botResponse, 'bot');
+            
+            // Scroll to bottom of chat
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }, 1500);
+    }
+    
+    function addMessage(content, sender) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${sender}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = sender === 'user' ? 'message-content user-message' : 'message-content bot-message';
+        contentDiv.textContent = content; // Use textContent to prevent XSS if content is user-generated
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = `Today, ${timeString}`;
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timeDiv);
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom of chat
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function showLoadingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'typing-indicator';
+        typingDiv.id = 'typing-indicator';
+        
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'typing-dot';
+            typingDiv.appendChild(dot);
+        }
+        
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function hideLoadingIndicator() {
+        const typingDiv = document.getElementById('typing-indicator');
+        if (typingDiv) {
+            typingDiv.remove();
+        }
+    }
+    
+    function generateBotResponse(userMessage) {
+        const lowerMessage = userMessage.toLowerCase();
+        
+        if (lowerMessage.includes('login') || lowerMessage.includes('log in')) {
+            return "For login functionality, you should test:\n\n1. Valid credentials\n2. Invalid username\n3. Invalid password\n4. Empty fields\n5. Password masking\n6. Forgot password link\n7. Remember me functionality\n\nWould you like me to provide detailed test cases for any of these scenarios?";
+        } else if (lowerMessage.includes('api') || lowerMessage.includes('rest')) {
+            return "For API testing, consider these aspects:\n\n1. Status code verification\n2. Response time\n3. Response body validation\n4. Error handling\n5. Authentication\n6. Rate limiting\n7. Data format validation\n\nI can provide Postman collection examples or code snippets for your preferred language if you'd like.";
+        } else if (lowerMessage.includes('performance') || lowerMessage.includes('load')) {
+            return "Performance testing should include:\n\n1. Baseline measurements\n2. Load testing\n3. Stress testing\n4. Soak testing\n5. Spike testing\n6. Resource utilization monitoring\n\nKB Bank recommends using JMeter for performance testing. Would you like a sample test plan?";
+        } else if (lowerMessage.includes('security') || lowerMessage.includes('pen test')) {
+            return "Security testing should cover:\n\n1. OWASP Top 10 vulnerabilities\n2. Authentication flaws\n3. Session management\n4. Data protection\n5. Input validation\n6. Security headers\n\nOur security team recommends using ZAP or Burp Suite for penetration testing. Need specific guidance?";
+        } else if (lowerMessage.includes('mobile') || lowerMessage.includes('app')) {
+            return "For mobile app testing, consider:\n\n1. Device compatibility\n2. OS version support\n3. Screen sizes\n4. Network conditions\n5. Battery usage\n6. Interruptions (calls, notifications)\n7. App store guidelines compliance\n\nWould you like test cases for specific mobile scenarios?";
+        } else {
+            const randomResponses = [
+                "I can help with test cases, automation scripts, performance testing, security testing, and more. What specifically do you need assistance with?",
+                "Would you like me to provide KB Bank's testing standards for this?",
+                "I can generate detailed test cases for this scenario. Should I proceed?",
+                "For this functionality, we should consider positive, negative, and edge case testing. Want me to elaborate?",
+                "Our documentation recommends using the following approach for this case..."
+            ];
+            
+            return randomResponses[Math.floor(Math.random() * randomResponses.length)];
+        }
+    }
+    
+    function showLoading(title, message) {
+        document.getElementById('loading-title').textContent = title;
+        document.getElementById('loading-message').textContent = message;
+        loadingOverlay.style.display = 'flex';
+    }
+    
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
+    }
+</script>
+{% endblock %}

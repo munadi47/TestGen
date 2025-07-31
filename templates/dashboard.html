@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}KB Bank - Test Automation{% endblock %}
+
+{% block content %}
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">KB Test Automation</h1>
+            <p class="text-gray-600">Internal tools for automated test case generation</p>
+        </div>
+        <div class="flex items-center">
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center">
+                <i class="fas fa-question-circle mr-2"></i> Help
+            </button>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-yellow-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-bolt text-yellow-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Auto Test Generation</h3>
+            </div>
+            <p class="text-gray-600 mb-4">Generate test cases automatically from Flowchart.</p>
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 w-full" onclick="window.location.href='{{ url_for('flowchart') }}'">
+                Generate Tests
+            </button>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-blue-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-robot text-blue-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">QA Assistant</h3>
+            </div>
+            <p class="text-gray-600 mb-4">Get answers to testing questions and best practice recommendations.</p>
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 w-full" onclick="window.location.href='{{ url_for('chatbot') }}'">
+                Chat Now
+            </button>
+        </div>
+        
+        <div class="card feature-card p-6">
+            <div class="flex items-center mb-4">
+                <div class="bg-purple-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-file-export text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold">Test Refinement</h3>
+            </div>
+            <p class="text-gray-600 mb-4">Improve the quality of your test cases. Refine test steps, remove redundancies, and align test cases with the latest requirements for better test accuracy.</p>
+            <button class="kb-bg-blue text-white px-4 py-2 rounded-lg hover:bg-yellow-700 w-full" onclick="window.location.href='{{ url_for('refinement') }}'">
+                Export
+            </button>
+        </div>
+    </div>
+    
+    <div class="card p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Quick Start Guide</h2>
+        <div class="space-y-3">
+            <div class="flex items-start">
+                <div class="bg-yellow-100 p-2 rounded-full mr-4 mt-1">
+                    <i class="fas fa-1 text-yellow-600"></i>
+                </div>
+                <div>
+                    <p class="font-medium">Upload your requirements document</p>
+                    <p class="text-sm text-gray-600">Supported formats: .docx, .txt, .pdf</p>
+                </div>
+            </div>
+            
+            <div class="flex items-start">
+                <div class="bg-blue-100 p-2 rounded-full mr-4 mt-1">
+                    <i class="fas fa-2 text-blue-600"></i>
+                </div>
+                <div>
+                    <p class="font-medium">Generate test cases</p>
+                    <p class="text-sm text-gray-600">Click the "Generate Tests" button</p>
+                </div>
+            </div>
+            
+            <div class="flex items-start">
+                <div class="bg-purple-100 p-2 rounded-full mr-4 mt-1">
+                    <i class="fas fa-3 text-purple-600"></i>
+                </div>
+                <div>
+                    <p class="font-medium">Review and export</p>
+                    <p class="text-sm text-gray-600">Export the refined test case to your preferred format</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
