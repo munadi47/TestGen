@@ -2,6 +2,7 @@ import os
 import logging
 import uuid
 import io
+from dotenv import load_dotenv # Load environment variables from .env file (KEY API)
 import base64 # Added for image encoding
 import requests # Added for direct API calls
 import csv # Added for CSV handling
@@ -50,6 +51,7 @@ def log_function_calls(func):
             logging.info(f"Selesai eksekusi fungsi: {func.__name__}. Durasi: {duration:.4f} detik.")
     return wrapper
 
+load_dotenv()
 app = Flask(__name__)
 
 # --- Configuration ---
@@ -86,11 +88,11 @@ chat_history = []
 logging.info("Chat history initialized.")
 
 # --- API Configuration ---
-GEMINI_API_KEY = 'AIzaSyCLo4Nlbo9_b7SyqZZpTeZL8l7hRW56ROk'
-GEMINI_MODEL_NAME = 'gemma-3-27b-it'
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODEL_NAME = 'gemma-3-27b-it' # This is likely not a secret, so it can stay
 
-ROBOFLOW_API_KEY = '5Wor1dW00UFHynXvJ6do'
-ROBOFLOW_MODEL_ID = 'flow-chart-detection/2' 
+ROBOFLOW_API_KEY = os.getenv('ROBOFLOW_API_KEY')
+ROBOFLOW_MODEL_ID = 'flow-chart-detection/2' # This is likely not a secret, so it can stay
 
 # --- Initializations ---
 if not os.path.exists(app.config['UPLOAD_FOLDER']):

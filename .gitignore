@@ -1,0 +1,9 @@
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Other sensitive files or folders
+# e.g., instance/, venv/
