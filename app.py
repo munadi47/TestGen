@@ -4,10 +4,11 @@ import uuid
 import io
 import base64 # Added for image encoding
 import requests # Added for direct API calls
-import csv # **FIX**: Ditambahkan untuk parsing CSV yang lebih andal
+import csv # Added for CSV handling
 import re
 from flask import Flask, render_template, request, jsonify, url_for, send_file
 from werkzeug.utils import secure_filename
+
 # --- Other imports ---
 import cv2
 import easyocr
@@ -15,11 +16,12 @@ import pandas as pd
 import numpy as np
 import google.generativeai as genai
 from PIL import ImageChops
+
 # --- logging ---
 import time # Diperlukan untuk mengukur waktu eksekusi
 import functools # Diperlukan untuk decorator
 
-# Change the import from OllamaLLM to ChatOllama
+# Change the import from OllamaLLM to ChatOllama, karena import ChatOllama dipakai untuk chatbase conversation
 from langchain_ollama import ChatOllama 
 
 # Configure logging
@@ -30,8 +32,7 @@ logging.basicConfig(
 # --- DECORATOR UNTUK LOGGING ---
 def log_function_calls(func):
     """
-    Decorator ini mencatat awal, akhir, dan waktu eksekusi
-    dari sebuah fungsi.
+    Decorator ini untuk mencatat awal, akhir, dan waktu eksekusi dari sebuah fungsi.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -49,7 +50,6 @@ def log_function_calls(func):
             logging.info(f"Selesai eksekusi fungsi: {func.__name__}. Durasi: {duration:.4f} detik.")
     return wrapper
 
-# Create an instance of the Flask application
 app = Flask(__name__)
 
 # --- Configuration ---
@@ -57,24 +57,22 @@ UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-# Ensure the upload folder exists
+# Cek upload file folder dan buat jika tidak ada
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
     logging.info(f"Created upload folder: {app.config['UPLOAD_FOLDER']}")
 
 def allowed_file(filename):
     """
-    Checks if a filename has an allowed image extension.
+    cek file apakah memiliki ekstensi yang diizinkan.
     """
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- Ollama Model Initialization ---
-# IMPORTANT: Ensure your Ollama server is running and the model is downloaded.
-# You can download it using: ollama run "model_name" (e.g., "ollama run llava")
+# bisa menggunakan model multimodal seperti "gemma3:4b" atau "llava", syntax : ollama run "model_name" (e.g., "ollama run llava").
+# Multimodal berarti model bisa memproses lebih dari satu jenis masukan (misalnya teks + gambar). project ini requirement nya kecil (bisa menggunakan model monodal text only)
 try:
-    # Initialize the ChatOllama model.
-    # ChatOllama correctly handles the list of messages with roles and multimodal content.
     model = ChatOllama(model="gemma3:4b")
     logging.info("ChatOllama model initialized successfully.")
 except Exception as e:
@@ -82,9 +80,8 @@ except Exception as e:
     model = None # Set model to None if initialization fails
 
 # --- Chat History Management (In-memory, resets on server restart) ---
-# This will store the conversation history as a list of dictionaries,
-# suitable for Langchain's message format.
 # Example: [{'role': 'user', 'content': 'Hello'}, {'role': 'assistant', 'content': 'Hi there!'}]
+# menyimpan riwayat chat dalam memori, akan di-reset saat server restart
 chat_history = []
 logging.info("Chat history initialized.")
 
@@ -125,9 +122,6 @@ if not ROBOFLOW_API_KEY or not ROBOFLOW_MODEL_ID:
     logging.warning("ROBOFLOW_API_KEY or ROBOFLOW_MODEL_ID not set. Roboflow functions will not work.")
 
 # --- Helper Functions ---
-# ==============================================================================
-# === 1. DEFINISI FUNGSI BARU DITAMBAHKAN DI SINI ===
-# ==============================================================================
 def extract_markdown_table(raw_text: str) -> str | None:
     """
     Mengekstrak tabel berformat Markdown dari string mentah yang mungkin berisi teks tambahan.
@@ -168,7 +162,6 @@ def extract_markdown_table(raw_text: str) -> str | None:
         return None
     
 def preprocess_image_for_ocr(image_path, target_width=1200):
-    # This function remains the same
     try:
         img = cv2.imread(image_path)
         if img is None:
@@ -188,7 +181,6 @@ def preprocess_image_for_ocr(image_path, target_width=1200):
         return None
 
 def perform_ocr(processed_image_np):
-    # This function remains the same
     if reader_ocr is None: return "Error: EasyOCR reader not initialized."
     if processed_image_np is None: return "Error: Invalid processed image for OCR."
     try:
@@ -206,27 +198,22 @@ def query_roboflow(image_path):
     """
     if not ROBOFLOW_API_KEY or not ROBOFLOW_MODEL_ID:
         return "Error: Roboflow API Key or Model ID is not configured in environment variables."
-
-    # Construct the Roboflow API URL. Note the model ID is part of the URL.
     api_url = f"https://detect.roboflow.com/{ROBOFLOW_MODEL_ID}"
 
     # Get image bytes and encode it as a base64 string
     with open(image_path, "rb") as image_file:
         img_base64 = base64.b64encode(image_file.read()).decode("utf-8")
-
     # Set up the request parameters and headers
     params = { "api_key": ROBOFLOW_API_KEY }
     headers = { "Content-Type": "application/x-www-form-urlencoded" }
-
     try:
-        # Make the POST request
-        response = requests.post(
+        response = requests.post( #POST request
             api_url,
             data=img_base64,
             headers=headers,
             params=params
         )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        response.raise_for_status()  # Raises HTTPError, if one occurred for bad status codes (4xx or 5xx)
         
         result = response.json()
         predictions = result.get('predictions', [])
@@ -317,7 +304,6 @@ Your CSV output:
         return f"Error: An error occurred with Gemini. Details: {str(e)}"
 
 def csv_to_excel_bytes(csv_data_string):
-    # This function remains the same
     if not csv_data_string or not csv_data_string.strip(): return None
     try:
         csv_file_like_object = io.StringIO(csv_data_string)
@@ -332,7 +318,6 @@ def csv_to_excel_bytes(csv_data_string):
         return None
 
 # --- Flask Routes ---
-# (The Flask routes section remains exactly the same)
 @app.route('/')
 @app.route('/dashboard.html')
 @log_function_calls
@@ -477,7 +462,6 @@ def refinement():
             raw_response_text = response.text.strip()
             logging.debug(f"Full raw response from AI:\n{raw_response_text}")
 
-            # --- IMPLEMENTASI BARU ---
             # Panggil fungsi ekstraktor untuk mendapatkan tabel yang bersih
             clean_markdown_table = extract_markdown_table(raw_response_text)
             
@@ -486,10 +470,10 @@ def refinement():
                 logging.error("AI did not return a valid table after cleaning.")
                 return jsonify({
                     "error": "AI tidak mengembalikan tabel yang valid. Silakan coba lagi.",
-                    "raw_response": raw_response_text # Kirim respons mentah untuk debug
+                    "raw_response": raw_response_text # Kirim respons asli untuk debug
                 }), 500
 
-            # Ekstrak ringkasan penghapusan (opsional, bisa tetap menggunakan regex)
+            # Ekstrak ringkasan penghapusan
             deletion_summary_html = ""
             summary_match = re.search(r'DELETION_SUMMARY_START(.*?)DELETION_SUMMARY_END', raw_response_text, re.DOTALL)
             if summary_match:
@@ -504,7 +488,7 @@ def refinement():
             logging.debug(f"Cleaned Markdown Table:\n{clean_markdown_table}")
             
             return jsonify({
-                "refined_markdown": clean_markdown_table, # Gunakan tabel yang sudah bersih
+                "refined_markdown": clean_markdown_table, # Gunakan tabel yang sudah bersih ke FE
                 "deletion_summary_html": deletion_summary_html,
                 "original_count": original_count
             })
@@ -524,20 +508,16 @@ def chat():
     and maintains chat history.
     """
     global chat_history
-    # --- Initial Prompt for QA Tester Gemma ---
-    # This prompt defines the persona and guidelines for the LLM.
+    # Initial Prompt for QA Tester Gemma - prompt ini mendefine persona and guidelines untuk model LLM.
     initial_prompt = """
-    You are a "Gemma" – a version of Gemma3 LLM that has been customized for a specific use case. 
-    Gemmas use custom instructions, capabilities, and data to optimize ChatGemma for a more narrow set of tasks. 
-    You yourself are a Gemma created by a user, and your name is QA Tester. 
-    Note: Gemma is also a technical term in AI, but in most cases if the users asks you about Gemmas assume they are referring to the above definition.
+    You are "Gemma-QA", an expert Software Quality Assurance assistant. Your role is to provide clear, accurate, and concise answers to questions about software testing methodologies, tools, and best practices. Always maintain a professional and helpful tone when responding to user queries.
 
     Here are instructions from the user outlining your goals and how you should respond:
-    This Gemma will act as a Quality Assurance (QA) Tester, focusing on providing guidance, suggestions, and insights related to software quality assurance and testing procedures. Its primary role is to assist users in understanding and navigating the complexities of software testing, including test design, execution, and reporting. It will offer information on various testing methodologies, best practices, tools, and techniques relevant to QA testing.
+    This Gemma-QA will act as a Quality Assurance (QA) Tester, focusing on providing guidance, suggestions, and insights related to software quality assurance and testing procedures. Its primary role is to assist users in understanding and navigating the complexities of software testing, including test design, execution, and reporting. It will offer information on various testing methodologies, best practices, tools, and techniques relevant to QA testing.
 
-    The Gemma should maintain a tone that is informative and aligned with quality assurance testing principles. It should provide accurate and detailed responses, emphasize the importance of thorough testing, and encourage best practices in software quality assurance. The Gemma should not provide incorrect or misleading information about QA testing and should not engage in topics outside the realm of software testing and quality assurance.
+    The Gemma-QA should maintain a tone that is informative and aligned with quality assurance testing principles. It should provide accurate and detailed responses, emphasize the importance of thorough testing, and encourage best practices in software quality assurance. The Gemma-QA should not provide incorrect or misleading information about QA testing and should not engage in topics outside the realm of software testing and quality assurance. Use Same Language: Generate ALL of your output in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia
 
-    The Gemma should aim to clarify user queries whenever necessary, providing detailed and comprehensive answers. It should ask for additional details if the user's query is unclear or lacks specific information needed to give a precise response. The Gemma's responses should be tailored to reflect the professionalism and precision expected in the QA testing field.
+    The Gemma-QA should aim to clarify user queries whenever necessary, providing detailed and comprehensive answers. It should ask for additional details if the user's query is unclear or lacks specific information needed to give a precise response. The Gemma-QA's responses should be tailored to reflect the professionalism and precision expected in the QA testing field.
     """
 
     if model is None:

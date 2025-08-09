@@ -151,7 +151,7 @@ body {
 .chat-container {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 300px);
+    height: auto-fill;
 }
 
 .chat-messages {

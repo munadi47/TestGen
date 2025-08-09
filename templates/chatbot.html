@@ -61,10 +61,7 @@
         <div class="chat-container">
             <div class="chat-messages" id="chat-messages">
                 <div class="message message-bot">
-                    <!-- <div class="message-content bot-message">
-                        Hello! I'm your KB QA Assistant. How can I help you with your quality assurance tasks today?
-                    </div>
-                    <div class="message-time">Today, 10:00 AM</div> -->
+                    <!-- Initial bot message will be added by JavaScript -->
                 </div>
             </div>
             
@@ -92,6 +89,8 @@
 {% endblock %}
 
 {% block page_scripts %}
+<!-- Include marked.js library for Markdown parsing -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
     const chatMessages = document.getElementById('chat-messages');
     const messageInput = document.getElementById('message-input');
@@ -157,8 +156,6 @@
         
         // Add user message to chat display immediately
         addUserMessageToChat(message, selectedImageFile);
-        
-
 
         // Show loading indicator
         showLoading('Thinking...', 'The QA Assistant is processing your request.');
@@ -213,7 +210,7 @@
         contentDiv.className = 'message-content user-message';
         
         if (content) {
-            contentDiv.textContent = content;
+            contentDiv.textContent = content; // User input is plain text
         }
 
         if (imageFile) {
@@ -244,8 +241,9 @@
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content bot-message';
-        // Use innerHTML to allow for <br> tags from bot's response
-        contentDiv.innerHTML = content.replace(/\n/g, '<br>'); 
+        
+        // Use marked.parse() to convert Markdown to HTML
+        contentDiv.innerHTML = marked.parse(content); 
         
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
