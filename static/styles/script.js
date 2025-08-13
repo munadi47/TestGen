@@ -1,7 +1,3 @@
-// This script dynamically sets the 'active' class on the sidebar navigation item
-// based on the current page's URL. This ensures the correct menu item is highlighted
-// when the page loads and provides a consistent active state across the application.
-
 document.addEventListener('DOMContentLoaded', function() {
     // Select all navigation list items in the sidebar
     const navItems = document.querySelectorAll('.nav-item');
@@ -22,23 +18,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Compare the link's href with the current page's filename
             // If they match, add the 'active' class to the navigation item
-            if (href === currentPath) {
+            const linkPath = href.startsWith('/') ? href.substring(1) : href;
+            if (linkPath === currentPath) {
                 item.classList.add('active');
             }
 
-            // Optional: Add a click event listener to each navigation item.
-            // This is primarily for visual feedback if a user clicks on the
-            // already active link (though it won't reload the page).
-            // It ensures that if new content were loaded dynamically without a full page refresh,
-            // the active class could still be managed.
+            // if (href === currentPath) {
+            //     item.classList.add('active');
+            // }
+
             item.addEventListener('click', function() {
                 // Remove 'active' class from all other navigation items
                 navItems.forEach(nav => nav.classList.remove('active'));
                 // Add 'active' class to the clicked item
                 this.classList.add('active');
             });
+            
         }
     });
+
+    
     fetch('/refinement.html', { /* ... options ... */ })
     .then(response => response.json())
     .then(data => {

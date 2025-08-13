@@ -89,10 +89,10 @@ logging.info("Chat history initialized.")
 
 # --- API Configuration ---
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL_NAME = 'gemma-3-27b-it' # This is likely not a secret, so it can stay
+GEMINI_MODEL_NAME = 'gemma-3-27b-it'
 
 ROBOFLOW_API_KEY = os.getenv('ROBOFLOW_API_KEY')
-ROBOFLOW_MODEL_ID = 'flow-chart-detection/2' # This is likely not a secret, so it can stay
+ROBOFLOW_MODEL_ID = 'flow-chart-detection/2'
 
 # --- Initializations ---
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -262,14 +262,20 @@ Text Data from Flowchart Components (OCR):
 Bounding Box and Label Information from Object Detection (Roboflow):
 {roboflow_data_str if roboflow_data_str.strip() else "No object detection data from Roboflow."}
 
+Guiding Principles for High-Quality Test Case Generation:
+1.  Identify All Paths: Do not only document the main "happy path". Analyze the flowchart for decision points (e.g., diamonds, conditional splits).
+2.  Create Negative Test Cases: Think about what could go wrong. For any step that involves user input, create a test case for invalid input. For example, if the flowchart shows "Enter Email", create a test scenario for entering an email in the wrong format.
+3.  Be Specific and Action-Oriented: "Test Steps" should be a sequence of concrete actions a user would perform. Use the Roboflow labels (e.g., 'button', 'input_field') to identify the component type and the OCR text to identify its specific name.
+4.  Write Clear and Verifiable Expected Results: The "Expected Result" must state precisely what should happen. It should be a verifiable outcome.
+5.  Synthesize Data Sources: Use the Roboflow data to understand the *type* of component (e.g., it's a `activity`, an `action`, a `decision_node`) and the OCR data to understand its *function* or *content* (e.g., the button's text is 'Submit', the decision asks 'Is user logged in?').
+
 Critical Instructions:
 1. Analyze both the OCR text and Roboflow bounding box data to understand the flowchart structure and logic.
 2. Generate only CSV data.
 3. For "Test Case ID", use the format "TC-XXX"
-4. For "Test Steps", use line breaks between each step (one action per line).
-5. Set the following fields as instructed: "Data", "Actual Result", "PIC" leave empty, and "Status" set to "Not Yet".
-6. Generate the test case content (like Test Scenario, Test Steps, Expected Result) based on your understanding of the flow. 
-7. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
+4. MUST Set the following fields: "Actual Result" and "PIC" leave empty, and "Status" set to "Not Yet".
+5. Generate the test case content (like Test Scenario, Test Steps, Expected Result) based on your understanding of the flow. 
+6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
 Your CSV output:
 """
 # Critical Instructions:
@@ -281,6 +287,7 @@ Your CSV output:
 # 6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
 
     generation_config = genai.types.GenerationConfig(candidate_count=1, temperature=0.3, max_output_tokens=8000)
+    # Temperature rendah (misalnya 0.2 - 0.5): presisi: Output lebih terfokus pada topik dan cenderung menghasilkan jawaban yang lebih akurat dan faktual.Output kurang bervariasi dan cenderung repetitif. Cocok untuk tugas-tugas yang membutuhkan jawaban yang tepat dan konsisten, seperti menjawab pertanyaan faktual, menerjemahkan, atau meringkas.
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
