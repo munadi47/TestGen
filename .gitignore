@@ -4,6 +4,6 @@
 # Python cache
 __pycache__/
 *.pyc
-
+offline-packages/
 # Other sensitive files or folders
 # e.g., instance/, venv/

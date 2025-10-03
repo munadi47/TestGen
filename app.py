@@ -1,28 +1,16 @@
-import os
-import logging
-import uuid
-import io
+import os, logging, uuid, io, base64, requests, csv, re
 from dotenv import load_dotenv # Load environment variables from .env file (KEY API)
-import base64 # Added for image encoding
-import requests # Added for direct API calls
-import csv # Added for CSV handling
-import re
 from flask import Flask, render_template, request, jsonify, url_for, send_file
 from werkzeug.utils import secure_filename
 
 # --- Other imports ---
-import cv2
-import easyocr
-import pandas as pd
-import numpy as np
-import google.generativeai as genai
-from PIL import ImageChops
+import cv2, easyocr, pandas as pd, numpy as np, google.generativeai as genai
+from PIL import Image, ImageChops
 
 # --- logging ---
-import time # Diperlukan untuk mengukur waktu eksekusi
-import functools # Diperlukan untuk decorator
+import time, functools # Diperlukan untuk decorator
 
-# Change the import from OllamaLLM to ChatOllama, karena import ChatOllama dipakai untuk chatbase conversation
+#dipakai untuk chatbase conversation
 from langchain_ollama import ChatOllama 
 
 # Configure logging
@@ -30,6 +18,7 @@ logging.basicConfig(
     level=logging.DEBUG, 
     format='%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s'
 )
+
 # --- DECORATOR UNTUK LOGGING ---
 def log_function_calls(func):
     """
@@ -71,28 +60,39 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- Ollama Model Initialization ---
-# bisa menggunakan model multimodal seperti "gemma3:4b" atau "llava", syntax : ollama run "model_name" (e.g., "ollama run llava").
-# Multimodal berarti model bisa memproses lebih dari satu jenis masukan (misalnya teks + gambar). project ini requirement nya kecil (bisa menggunakan model monodal text only)
-try:
-    model = ChatOllama(model="gemma3:4b")
-    logging.info("ChatOllama model initialized successfully.")
-except Exception as e:
-    logging.error(f"Failed to initialize ChatOllama: {e}")
-    model = None # Set model to None if initialization fails
-
-# --- Chat History Management (In-memory, resets on server restart) ---
-# Example: [{'role': 'user', 'content': 'Hello'}, {'role': 'assistant', 'content': 'Hi there!'}]
-# menyimpan riwayat chat dalam memori, akan di-reset saat server restart
-chat_history = []
-logging.info("Chat history initialized.")
-
 # --- API Configuration ---
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL_NAME = 'gemma-3-27b-it'
+GEMINI_MODEL_NAME = 'gemma-3-27b-it' #gemini-2.5-flash gemma-3-27b-it
 
 ROBOFLOW_API_KEY = os.getenv('ROBOFLOW_API_KEY')
 ROBOFLOW_MODEL_ID = 'flow-chart-detection/2'
+
+CHAT_PROVIDER = os.getenv('CHAT_PROVIDER', 'ollama').lower()
+logging.info(f"Chat provider diatur ke: '{CHAT_PROVIDER}'")
+
+# --- Ollama Model Initialization ---
+# bisa menggunakan model multimodal seperti "gemma3:4b" atau "llava", syntax : ollama run "model_name" (e.g., "ollama run llava").
+# Multimodal berarti model bisa memproses lebih dari satu jenis masukan (misalnya teks + gambar). project ini requirement nya kecil (bisa menggunakan model monodal text only)
+model = None # Inisialisasi model sebagai None
+if CHAT_PROVIDER == 'ollama':
+    try:
+        model = ChatOllama(model="gemma3:4b")
+        logging.info("Model ChatOllama berhasil diinisialisasi untuk chatbot.")
+    except Exception as e:
+        logging.error(f"Gagal menginisialisasi ChatOllama: {e}")
+elif CHAT_PROVIDER == 'gemini':
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+        logging.info("Gemini API akan digunakan untuk chatbot.")
+    else:
+        logging.error("CHAT_PROVIDER adalah 'gemini' tetapi GEMINI_API_KEY tidak diatur.")
+else:
+    logging.error(f"CHAT_PROVIDER tidak valid: '{CHAT_PROVIDER}'. Chatbot tidak akan berfungsi.")
+
+
+# --- Chat History Management (In-memory, resets on server restart) ---
+chat_history = []
+logging.info("Chat history initialized.")
 
 # --- Initializations ---
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -106,6 +106,11 @@ def allowed_file(filename):
 try:
     logging.info("Initializing EasyOCR Reader...")
     reader_ocr = easyocr.Reader(['en'], gpu=True)  # Set gpu=True if you have a compatible GPU
+    # reader_ocr = easyocr.Reader(
+    #     ['id', 'en'], 
+    #     model_storage_directory='C:/Py/TestGen_Deploy_windows/TestGen/ocr-models', 
+    #     gpu=False
+    # )
     logging.info("EasyOCR Reader initialized successfully.")
 except Exception as e:
     logging.error(f"Error initializing EasyOCR Reader: {e}")
@@ -193,7 +198,7 @@ def perform_ocr(processed_image_np):
         logging.error(f"Error during OCR: {e}")
         return f"Error during OCR: {str(e)}"
 
-# --- UPDATED query_roboflow function ---
+# --- query_roboflow function ---
 def query_roboflow(image_path):
     """
     Sends an image to the Roboflow API for object detection using the requests library.
@@ -278,14 +283,6 @@ Critical Instructions:
 6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
 Your CSV output:
 """
-# Critical Instructions:
-# 1. Analyze both the OCR text and the Roboflow bounding box data to understand the flow.
-# 2. Generate only CSV data.
-# 3. For "Test Case ID", use the format "TC-XXX" and For "Steps" use line breaks.
-# 4. Leave "Actual Result","PIC", and "Data" **empty**, and set "Status" to "Not Yet".
-# 5. Generate the test case content (like Test Scenario, Steps, etc.) 
-# 6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
-
     generation_config = genai.types.GenerationConfig(candidate_count=1, temperature=0.3, max_output_tokens=8000)
     # Temperature rendah (misalnya 0.2 - 0.5): presisi: Output lebih terfokus pada topik dan cenderung menghasilkan jawaban yang lebih akurat dan faktual.Output kurang bervariasi dan cenderung repetitif. Cocok untuk tugas-tugas yang membutuhkan jawaban yang tepat dan konsisten, seperti menjawab pertanyaan faktual, menerjemahkan, atau meringkas.
     safety_settings = [
@@ -430,10 +427,8 @@ def refinement():
                 * Review all original test cases to identify any that are **redundant, duplicates, or obsolete**.
                 * Do not remove main feature even if common and not detail
                 * Remove these identified test cases from the final table.
-
             2.  **Enhance Coverage:**
                 * Based on the remaining test cases, add **new test cases** to improve coverage, focusing on **negative scenarios** and **edge cases**.
-
             3.  **Structure Your Output (CRITICAL):**
                 * You MUST structure your entire response in two distinct parts using the specified markers.
                 * Use Same Language: Generate ALL of your output, including the deletion summary and all new test case content (scenarios, steps, notes), in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
@@ -517,82 +512,144 @@ def chat():
     and maintains chat history.
     """
     global chat_history
-    # Initial Prompt for QA Tester Gemma - prompt ini mendefine persona and guidelines untuk model LLM.
-    initial_prompt = """
-    You are "Gemma-QA", an expert Software Quality Assurance assistant. Your role is to provide clear, accurate, and concise answers to questions about software testing methodologies, tools, and best practices. Always maintain a professional and helpful tone when responding to user queries.
-
-    Here are instructions from the user outlining your goals and how you should respond:
-    This Gemma-QA will act as a Quality Assurance (QA) Tester, focusing on providing guidance, suggestions, and insights related to software quality assurance and testing procedures. Its primary role is to assist users in understanding and navigating the complexities of software testing, including test design, execution, and reporting. It will offer information on various testing methodologies, best practices, tools, and techniques relevant to QA testing.
-
-    The Gemma-QA should maintain a tone that is informative and aligned with quality assurance testing principles. It should provide accurate and detailed responses, emphasize the importance of thorough testing, and encourage best practices in software quality assurance. The Gemma-QA should not provide incorrect or misleading information about QA testing and should not engage in topics outside the realm of software testing and quality assurance. Use Same Language: Generate ALL of your output in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia
-
-    The Gemma-QA should aim to clarify user queries whenever necessary, providing detailed and comprehensive answers. It should ask for additional details if the user's query is unclear or lacks specific information needed to give a precise response. The Gemma-QA's responses should be tailored to reflect the professionalism and precision expected in the QA testing field.
-    """
-
-    if model is None:
-        return jsonify({"response": "Error: LLM model not initialized. Please check server logs."}), 500
 
     user_input = request.form.get('user_input', '').strip()
     image_file = request.files.get('image')
+    
+    if not user_input and not image_file:
+        return jsonify({"response": "Silakan masukkan pesan atau unggah gambar."}), 400
+    
+    # Bounding dan initial Prompt QA Tester Gemma, prompt ini mendefine persona and guidelines untuk model LLM.
+    initial_prompt = """
+    You are "Gemma-QA", an expert Software Quality Assurance assistant. Your role is to provide clear, accurate, and concise answers to questions about software testing methodologies, tools, and best practices. Always maintain a professional and helpful tone when responding to user queries.
+    Here are instructions from the user outlining your goals and how you should respond:
+    
+    - This Gemma-QA will act as a Quality Assurance (QA) Tester, focusing on providing guidance, suggestions, and insights related to software quality assurance and testing procedures. Its primary role is to assist users in understanding and navigating the complexities of software testing, including test design, execution, and reporting. It will offer information on various testing methodologies, best practices, tools, and techniques relevant to QA testing.
+    - The Gemma-QA should maintain a tone that is informative and aligned with quality assurance testing principles. It should provide accurate and detailed responses, emphasize the importance of thorough testing, and encourage best practices in software quality assurance. The Gemma-QA should not provide incorrect or misleading information about QA testing and should not engage in topics outside the realm of software testing and quality assurance. Use Same Language: Generate ALL of your output in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
+    - The Gemma-QA should aim to clarify user queries whenever necessary, providing detailed and comprehensive answers. It should ask for additional details if the user's query is unclear or lacks specific information needed to give a precise response. The Gemma-QA's responses should be tailored to reflect the professionalism and precision expected in the QA testing field.
+    """
+    # Tambahkan prompt awal sebagai pesan pertama jika riwayat chat kosong
+    if not chat_history:
+        # Untuk Gemini, pesan pertama dari 'model' mengatur persona.
+        # Untuk Ollama (dengan langchain), peran 'system' digunakan.
+        role_for_initial_prompt = 'model' if CHAT_PROVIDER == 'gemini' else 'system'
+        chat_history.append({'role': role_for_initial_prompt, 'content': initial_prompt})
+        logging.info("Prompt persona awal ditambahkan ke riwayat chat.")
+
+    # if model is None:
+    #     return jsonify({"response": "Error: LLM model not initialized. Please check server logs."}), 500
 
     current_user_message_parts = []
-
     if user_input:
-        current_user_message_parts.append({"text": user_input})
+        current_user_message_parts.append(user_input)
 
+    image_path = None # Untuk menyimpan path gambar agar bisa dihapus nanti
+    pil_image = None # Untuk menyimpan objek gambar PIL untuk Gemini
     if image_file and allowed_file(image_file.filename):
         try:
             filename = secure_filename(image_file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            image_file.save(filepath)
-            logging.debug(f"Image saved to {filepath}")
-            current_user_message_parts.append({"image": filepath})
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image_file.save(image_path)
+            # Untuk Gemini, kita akan membuka gambar dengan PIL
+            pil_image = Image.open(image_path)
+            # Pesan pengguna untuk Gemini dapat berisi teks dan objek gambar
+            if CHAT_PROVIDER == 'gemini':
+                current_user_message_parts.append(pil_image)
         except Exception as e:
-            logging.error(f"Error saving image: {e}")
-            return jsonify({"response": f"Error saving image: {str(e)}"}), 500
+            logging.error(f"Error saat menyimpan atau memproses gambar: {e}")
+            return jsonify({"response": f"Error saat menyimpan gambar: {str(e)}"}), 500
+
+    # Tambahkan pesan pengguna ke riwayat
+    # Formatnya sedikit berbeda tergantung provider, akan disesuaikan nanti
+    chat_history.append({'role': 'user', 'content': current_user_message_parts, 'image_path': image_path})
     
-    if not user_input and not image_file:
-        return jsonify({"response": "Please enter a message or upload an image."}), 400
-
-    # Add the initial prompt as a system message if chat history is empty
-    # This ensures the model's persona is set at the beginning of the conversation.
-    if not chat_history:
-        chat_history.append({'role': 'system', 'content': initial_prompt})
-        logging.info("Initial system prompt added to chat history.")
-
-    # Append current user message to global chat history
-    chat_history.append({'role': 'user', 'content': current_user_message_parts})
-
-    # Prepare messages for the ChatOllama model
-    langchain_messages = []
-    for msg in chat_history:
-        if isinstance(msg['content'], list): # Multimodal content
-            langchain_content_parts = []
-            for part in msg['content']:
-                if 'text' in part:
-                    langchain_content_parts.append({"type": "text", "text": part['text']})
-                if 'image' in part:
-                    # For Ollama's multimodal models, file paths are typically sent as local file URLs
-                    langchain_content_parts.append({"type": "image_url", "image_url": {"url": f"file://{os.path.abspath(part['image'])}"}} )
-            langchain_messages.append({'role': msg['role'], 'content': langchain_content_parts})
-        else: # Text-only content (including the initial system prompt and assistant responses)
-            langchain_messages.append({'role': msg['role'], 'content': msg['content']})
-
-    logging.debug(f"Messages sent to ChatOllama model: {langchain_messages}")
-
     try:
-        response_message = model.invoke(langchain_messages)
-        response_text = response_message.content 
-        logging.debug(f"ChatOllama raw response content: {response_text}")
+        # --- LOGIKA UNTUK BERALIH ANTARA OLLAMA DAN GEMINI ---
+        if CHAT_PROVIDER == 'gemini':
+            if not GEMINI_API_KEY:
+                return jsonify({"response": "Error: Kunci API Gemini tidak dikonfigurasi."}), 500
+            
+            gemini_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+            
+            # Konversi riwayat chat ke format yang diharapkan Gemini
+            gemini_history = []
+            for msg in chat_history[:-1]: # Kecualikan pesan pengguna saat ini
+                role = msg['role']
+                if role == 'assistant' or role == 'system':
+                    role = 'model'
+                
+                content = msg['content']
+                parts_list = content if isinstance(content, list) else [content]
 
-        # Append bot response to global chat history
-        chat_history.append({'role': 'assistant', 'content': response_text})
-        logging.debug(f"Updated chat history: {chat_history}")
+                # Sesi chat Gemini (ChatSession) seharusnya mempertahankan konteks gambar secara internal.
+                history_parts = [part for part in parts_list if not isinstance(part, Image.Image)]
+
+                # Hanya tambahkan ke riwayat jika ada konten (misalnya bukan hanya gambar)
+                if history_parts:
+                    gemini_history.append({'role': role, 'parts': history_parts})
+
+            # Mulai sesi chat dengan riwayat yang ada
+            chat_session = gemini_model.start_chat(history=gemini_history)
+            
+            # Kirim pesan baru (teks dan/atau gambar)
+            response = chat_session.send_message(current_user_message_parts)
+            response_text = response.text
+        
+        elif CHAT_PROVIDER == 'ollama':
+            if model is None:
+                return jsonify({"response": "Error: Model Ollama tidak diinisialisasi."}), 500
+
+            # Konversi riwayat ke format Langchain
+            langchain_messages = []
+            for msg in chat_history:
+                role = msg['role']
+                # Langchain tidak menerima peran 'model', ganti kembali ke 'assistant' jika ada
+                if role == 'model':
+                    role = 'assistant'
+
+                content_list = msg['content']
+                
+                langchain_parts = []
+                # Iterasi melalui setiap bagian dari konten pesan
+                if isinstance(content_list, list):
+                    for part in content_list:
+                        if isinstance(part, str): # Bagian teks
+                            langchain_parts.append({"type": "text", "text": part})
+                else: # Jika konten bukan list (misal: prompt sistem)
+                    langchain_parts.append({"type": "text", "text": content_list})
+
+                # Tambahkan URL gambar HANYA jika ada path gambar di pesan ini
+                if msg.get('image_path'):
+                    # Langchain untuk Ollama memerlukan URL file lokal
+                    abs_path = os.path.abspath(msg.get('image_path'))
+                    langchain_parts.append({"type": "image_url", "image_url": {"url": f"file://{abs_path}"}})
+
+                langchain_messages.append({'role': role, 'content': langchain_parts})
+
+            response_message = model.invoke(langchain_messages)
+            response_text = response_message.content
+
+        # --- JIKA TIDAK VALID ---
+        else:
+            return jsonify({"response": f"Error: CHAT_PROVIDER '{CHAT_PROVIDER}' tidak valid."}), 500
+
+        assistant_role = 'model' if CHAT_PROVIDER == 'gemini' else 'assistant'
+        # Tambahkan respons asisten ke riwayat menggunakan peran yang benar
+        chat_history.append({'role': assistant_role, 'content': response_text})
 
         return jsonify({"response": response_text})
+
     except Exception as e:
-        logging.error(f"Error invoking ChatOllama model: {e}")
-        return jsonify({"response": f"Error: {str(e)}. Ensure Ollama server is running and LLM model is downloaded."}), 500
+        logging.error(f"Error saat memanggil model chat '{CHAT_PROVIDER}': {e}", exc_info=True)
+        return jsonify({"response": f"Terjadi kesalahan dengan model AI. Detail: {str(e)}"}), 500
+    finally:
+        # --- PERBAIKAN: Tutup file gambar PIL jika ada untuk melepaskan handle ---
+        if pil_image:
+            pil_image.close()
+
+        if image_path and os.path.exists(image_path):
+            os.remove(image_path)
+            logging.info(f"File gambar chat sementara dihapus: {image_path}")
 
 if __name__ == '__main__':
     app.run(debug=True)
