@@ -1,3 +1,6 @@
+#venv\Scripts\activate -> di laptop pribadi
+#py app.py atau Flask run -> di laptop kantor karena install gapake env
+
 import os, logging, uuid, io, base64, requests, csv, re
 from dotenv import load_dotenv # Load environment variables from .env file (KEY API)
 from flask import Flask, render_template, request, jsonify, url_for, send_file
@@ -267,7 +270,7 @@ Text Data from Flowchart Components (OCR):
 Bounding Box and Label Information from Object Detection (Roboflow):
 {roboflow_data_str if roboflow_data_str.strip() else "No object detection data from Roboflow."}
 
-Guiding Principles for High-Quality Test Case Generation:
+Guiding Principles for Test Case Generation:
 1.  Identify All Paths: Do not only document the main "happy path". Analyze the flowchart for decision points (e.g., diamonds, conditional splits).
 2.  Create Negative Test Cases: Think about what could go wrong. For any step that involves user input, create a test case for invalid input. For example, if the flowchart shows "Enter Email", create a test scenario for entering an email in the wrong format.
 3.  Be Specific and Action-Oriented: "Test Steps" should be a sequence of concrete actions a user would perform. Use the Roboflow labels (e.g., 'button', 'input_field') to identify the component type and the OCR text to identify its specific name.
@@ -278,21 +281,22 @@ Critical Instructions:
 1. Analyze both the OCR text and Roboflow bounding box data to understand the flowchart structure and logic.
 2. Generate only CSV data.
 3. For "Test Case ID", use the format "TC-XXX"
-4. MUST Set the following fields: "Actual Result" and "PIC" leave empty, and "Status" set to "Not Yet".
+4. Set the "Status" column to "Not Yet". The "Actual Result" and "PIC" columns MUST be left completely blank (empty string).
 5. Generate the test case content (like Test Scenario, Test Steps, Expected Result) based on your understanding of the flow. 
 6. Use Same Language: Generate ALL the test case, in the **exact same language** you detected. If the input is in Bahasa Indonesia, your entire output must also be in Bahasa Indonesia.
 Your CSV output:
 """
-    generation_config = genai.types.GenerationConfig(candidate_count=1, temperature=0.3, max_output_tokens=8000)
-    # Temperature rendah (misalnya 0.2 - 0.5): presisi: Output lebih terfokus pada topik dan cenderung menghasilkan jawaban yang lebih akurat dan faktual.Output kurang bervariasi dan cenderung repetitif. Cocok untuk tugas-tugas yang membutuhkan jawaban yang tepat dan konsisten, seperti menjawab pertanyaan faktual, menerjemahkan, atau meringkas.
-    safety_settings = [
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-    ]
+    generation_config = genai.types.GenerationConfig(candidate_count=1, temperature=0.2, max_output_tokens=8000)
+    # Setting Temperature rendah (misalnya 0.2 - 0.5): presisi: Output lebih terfokus pada topik dan cenderung menghasilkan jawaban yang lebih akurat dan faktual.Output kurang bervariasi dan cenderung repetitif. Cocok untuk tugas-tugas yang membutuhkan jawaban yang tepat dan konsisten, seperti menjawab pertanyaan faktual, menerjemahkan, atau meringkas.
+    # safety_settings = [
+    #     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    #     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    #     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    #     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    # ]
     try:
-        response = model.generate_content(prompt, generation_config=generation_config, safety_settings=safety_settings)
+        # response = model.generate_content(prompt, generation_config=generation_config, safety_settings=safety_settings)
+        response = model.generate_content(prompt, generation_config=generation_config)
         if response.parts:
             csv_output = response.parts[0].text.strip()
         elif response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
